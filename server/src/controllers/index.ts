@@ -4,6 +4,7 @@ import * as transactionController from './transactionController';
 import * as paymentController from './paymentController';
 import * as loanController from './loanController';
 import * as savingsController from './savingsController';
+import * as investmentController from './investmentController';
 
 export {
   authController,
@@ -12,4 +13,5 @@ export {
   paymentController,
   loanController,
   savingsController,
+  investmentController,
 };

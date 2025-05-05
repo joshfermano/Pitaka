@@ -6,24 +6,26 @@ import { RequestHandler } from 'express';
 const router = express.Router();
 
 // Protect all routes
-router.use(protect as RequestHandler);
+router.use(protect as unknown as RequestHandler);
 
 // Create and retrieve savings
 router
   .route('/')
-  .post(savingsController.createSavings as RequestHandler)
-  .get(savingsController.getSavings as RequestHandler);
+  .post(savingsController.createSavings as unknown as RequestHandler)
+  .get(savingsController.getSavings as unknown as RequestHandler);
 
 // Get specific savings by ID
-router.route('/:id').get(savingsController.getSavingsById as RequestHandler);
+router
+  .route('/:id')
+  .get(savingsController.getSavingsById as unknown as RequestHandler);
 
 // Deposit and withdraw from savings
 router
   .route('/:id/deposit')
-  .post(savingsController.depositToSavings as RequestHandler);
+  .post(savingsController.depositToSavings as unknown as RequestHandler);
 
 router
   .route('/:id/withdraw')
-  .post(savingsController.withdrawFromSavings as RequestHandler);
+  .post(savingsController.withdrawFromSavings as unknown as RequestHandler);
 
 export default router;

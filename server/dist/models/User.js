@@ -130,7 +130,6 @@ UserSchema.pre('save', async function (next) {
         next(error);
     }
 });
-// Method to compare password
 UserSchema.methods.comparePassword = async function (candidatePassword) {
     return bcryptjs_1.default.compare(candidatePassword, this.password);
 };
@@ -140,9 +139,10 @@ UserSchema.methods.generateAuthToken = function () {
     if (!jwtSecret) {
         throw new Error('JWT_SECRET is not defined in environment variables');
     }
-    const token = jsonwebtoken_1.default.sign({ id: this._id, username: this.username }, jwtSecret, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-    });
-    return token;
+    const payload = {
+        id: this._id.toString(),
+        username: this.email,
+    };
+    return jsonwebtoken_1.default.sign(payload, jwtSecret, { expiresIn: '24h' });
 };
 exports.default = mongoose_1.default.model('User', UserSchema);

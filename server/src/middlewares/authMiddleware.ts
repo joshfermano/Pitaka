@@ -6,7 +6,11 @@ import { StatusCodes } from 'http-status-codes';
 declare global {
   namespace Express {
     interface Request {
-      user?: any;
+      user?: {
+        id: string;
+        email: string;
+        role: string;
+      };
     }
   }
 }
@@ -20,52 +24,80 @@ export const protect = async (
   next: NextFunction
 ) => {
   try {
-    let token;
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
 
-    // Check if token exists in headers
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer')
-    ) {
-      token = req.headers.authorization.split(' ')[1];
+    // First try to get token from Authorization header (Bearer token)
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+      console.log('Auth token found in Authorization header');
     }
 
-    // Check if token exists
+    // If no token in header, try cookies (for web clients)
+    if (!token && req.cookies?.token) {
+      token = req.cookies.token;
+      console.log('Auth token found in cookies');
+    }
+
     if (!token) {
+      console.log('Authentication failed: No token provided');
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
-        message: 'Not authorized to access this route',
+        message: 'Authentication failed. Please log in again.',
       });
     }
 
+    // Get JWT secret from environment variables
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('JWT_SECRET is missing from environment variables');
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'Server configuration error. Please contact administrator.',
+      });
+    }
+
+    // Verify token
     try {
-      // Verify token
-      const decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET as string
-      ) as any;
+      // @ts-ignore
+      const decoded = jwt.verify(token, jwtSecret) as {
+        id: string;
+        email: string;
+        role?: string;
+      };
 
-      // Set user in request
-      req.user = await User.findById(decoded.id).select('-password');
+      // Set user info in request
+      req.user = {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role || 'user', // Default role if not in token
+      };
 
-      if (!req.user) {
+      console.log(`Authenticated user: ${req.user.email} (${req.user.id})`);
+
+      // Proceed to the protected route
+      next();
+    } catch (jwtError: any) {
+      console.error('JWT verification error:', jwtError.message);
+
+      // Return specific error message for token issues
+      if (jwtError.name === 'TokenExpiredError') {
         return res.status(StatusCodes.UNAUTHORIZED).json({
           success: false,
-          message: 'Not authorized to access this route',
+          message: 'Your session has expired. Please log in again.',
         });
       }
 
-      next();
-    } catch (error) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
-        message: 'Not authorized to access this route',
+        message: 'Authentication failed. Invalid token.',
       });
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Authentication error:', error.message);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: 'Server error in auth middleware',
+      message: 'Server error during authentication.',
     });
   }
 };
@@ -74,49 +106,43 @@ export const protect = async (
  * Error handling middleware
  */
 export const errorHandler = (
-  err: any,
+  err: Error,
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
-  console.error('Error:', err);
+  console.error('Global error handler:', err);
 
-  // Default error
-  let statusCode = StatusCodes.INTERNAL_SERVER_ERROR;
-  let message = 'Server Error';
-
-  // Mongoose duplicate key error
-  if (err.code === 11000) {
-    statusCode = StatusCodes.BAD_REQUEST;
-    const field = Object.keys(err.keyValue)[0];
-    message = `${
-      field.charAt(0).toUpperCase() + field.slice(1)
-    } already exists`;
-  }
-
-  // Mongoose validation error
-  if (err.name === 'ValidationError') {
-    statusCode = StatusCodes.BAD_REQUEST;
-    message = Object.values(err.errors)
-      .map((val: any) => val.message)
-      .join(', ');
-  }
-
-  // JWT error
-  if (err.name === 'JsonWebTokenError') {
-    statusCode = StatusCodes.UNAUTHORIZED;
-    message = 'Invalid token';
-  }
-
-  // JWT expired error
-  if (err.name === 'TokenExpiredError') {
-    statusCode = StatusCodes.UNAUTHORIZED;
-    message = 'Token expired';
-  }
-
-  res.status(statusCode).json({
+  // Custom error response
+  res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
     success: false,
-    message,
-    error: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    message: 'Server error',
+    error:
+      process.env.NODE_ENV === 'development'
+        ? err.message
+        : 'An unexpected error occurred',
   });
+};
+
+/**
+ * Restrict access to certain roles
+ */
+export const restrictTo = (...roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        success: false,
+        message: 'You do not have permission to perform this action',
+      });
+    }
+
+    next();
+  };
 };

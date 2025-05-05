@@ -127,17 +127,25 @@ UserSchema.methods.comparePassword = async function (
 
 // Method to generate JWT
 UserSchema.methods.generateAuthToken = function (): string {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    throw new Error('JWT_SECRET is not defined in environment variables');
+  try {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is not defined in environment variables');
+    }
+
+    const payload = {
+      id: this._id.toString(),
+      email: this.email,
+    };
+
+    // @ts-ignore
+    return jwt.sign(payload, jwtSecret, {
+      expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+    });
+  } catch (error) {
+    console.error('Error generating auth token:', error);
+    throw error;
   }
-
-  const payload = {
-    id: this._id.toString(),
-    username: this.username,
-  };
-
-  return jwt.sign(payload, jwtSecret);
 };
 
 export default mongoose.model<IUser>('User', UserSchema);

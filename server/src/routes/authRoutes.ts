@@ -9,6 +9,10 @@ const router = express.Router();
 router.post('/register', authController.register as unknown as RequestHandler);
 router.post('/login', authController.login as unknown as RequestHandler);
 router.post('/logout', authController.logout as unknown as RequestHandler);
+router.post(
+  '/refresh-token',
+  authController.refreshToken as unknown as RequestHandler
+);
 
 // Protected routes
 router.use(protect as unknown as RequestHandler);

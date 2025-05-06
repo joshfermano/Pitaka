@@ -1,9 +1,154 @@
 import { Request, Response } from 'express';
-import { Payment } from '../models/Payment';
+import { Payment, Biller } from '../models/Payment';
 import Account from '../models/Account';
 import Transaction from '../models/Transaction';
 import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
+
+/**
+ * Get all billers
+ * @route GET /api/payments/billers
+ * @access Public
+ */
+export const getAllBillers = async (req: Request, res: Response) => {
+  try {
+    const billers = await Biller.find({ isActive: true }).sort({ name: 1 });
+
+    if (billers.length === 0) {
+      return res.status(StatusCodes.OK).json({
+        success: true,
+        count: 0,
+        data: { billers: [] },
+        message: 'No billers found. Please seed the database first.',
+      });
+    }
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      count: billers.length,
+      data: { billers },
+    });
+  } catch (error: any) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch billers',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get billers by category
+ * @route GET /api/payments/billers/category/:category
+ * @access Public
+ */
+export const getBillersByCategory = async (req: Request, res: Response) => {
+  try {
+    const { category } = req.params;
+
+    // Validate category
+    const validCategories = [
+      'ELECTRICITY',
+      'WATER',
+      'INTERNET',
+      'ENTERTAINMENT',
+      'INSURANCE',
+      'TELECOM',
+      'OTHERS',
+    ];
+    if (!validCategories.includes(category.toUpperCase())) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid category',
+      });
+    }
+
+    const billers = await Biller.find({
+      category: category.toUpperCase(),
+      isActive: true,
+    }).sort({ name: 1 });
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      count: billers.length,
+      data: { billers },
+    });
+  } catch (error: any) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch billers by category',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get popular billers
+ * @route GET /api/payments/billers/popular
+ * @access Public
+ */
+export const getPopularBillers = async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt((req.query.limit as string) || '5', 10);
+
+    const billers = await Biller.find({
+      isActive: true,
+      popularIndex: { $exists: true },
+    })
+      .sort({ popularIndex: 1 })
+      .limit(limit);
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      count: billers.length,
+      data: { billers },
+    });
+  } catch (error: any) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch popular billers',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get biller by ID
+ * @route GET /api/payments/billers/:id
+ * @access Public
+ */
+export const getBillerById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid biller ID',
+      });
+    }
+
+    const biller = await Biller.findOne({ _id: id, isActive: true });
+
+    if (!biller) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: 'Biller not found',
+      });
+    }
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: { biller },
+    });
+  } catch (error: any) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch biller',
+      error: error.message,
+    });
+  }
+};
 
 /**
  * Create a new payment
@@ -16,15 +161,15 @@ export const createPayment = async (req: Request, res: Response) => {
 
   try {
     const userId = req.user?.id;
-    const {
-      accountId,
-      billerId,
-      billerName,
-      accountNumber,
-      amount,
-      fee = 0,
-      description,
-    } = req.body;
+    const { accountId, billerId, accountNumber, amount, description } =
+      req.body;
+
+    if (!userId) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: 'User not authenticated',
+      });
+    }
 
     if (!mongoose.Types.ObjectId.isValid(accountId)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -33,7 +178,15 @@ export const createPayment = async (req: Request, res: Response) => {
       });
     }
 
-    if (amount <= 0) {
+    if (!mongoose.Types.ObjectId.isValid(billerId)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid biller ID',
+      });
+    }
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Payment amount must be greater than zero',
@@ -53,8 +206,28 @@ export const createPayment = async (req: Request, res: Response) => {
       });
     }
 
+    // Fetch biller details
+    const biller = await Biller.findById(billerId);
+    if (!biller) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: 'Biller not found',
+      });
+    }
+
+    // Validate payment amount against biller constraints
+    if (amountNum < biller.minimumAmount || amountNum > biller.maximumAmount) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: `Payment amount must be between ${biller.minimumAmount} and ${biller.maximumAmount}`,
+      });
+    }
+
+    // Calculate convenience fee if applicable
+    const fee = biller.convenienceFee || 0;
+    const totalAmount = amountNum + fee;
+
     // Check if account has sufficient balance
-    const totalAmount = amount + fee;
     if (account.balance < totalAmount) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
@@ -66,15 +239,15 @@ export const createPayment = async (req: Request, res: Response) => {
     const referenceNumber = Payment.generateReferenceNumber();
 
     // Create payment record with initial status
-    const payment = await Payment.create(
+    const paymentRecord = await Payment.create(
       [
         {
           userId,
           accountId,
           billerId,
-          billerName,
+          billerName: biller.name,
           accountNumber,
-          amount,
+          amount: amountNum,
           fee,
           status: 'PENDING',
           referenceNumber,
@@ -93,10 +266,10 @@ export const createPayment = async (req: Request, res: Response) => {
         {
           userId,
           accountId,
-          type: 'payment',
+          type: 'PAYMENT',
           amount: totalAmount,
-          description: description || `Payment to ${billerName}`,
-          paymentId: payment[0]._id,
+          description: description || `Payment to ${biller.name}`,
+          paymentId: paymentRecord[0]._id,
         },
       ],
       { session }
@@ -104,10 +277,11 @@ export const createPayment = async (req: Request, res: Response) => {
 
     // Update payment with transaction ID and mark as completed
     if (transaction[0]?._id) {
-      payment[0].transactionId = transaction[0]._id as any;
+      paymentRecord[0].transactionId = transaction[0]
+        ._id as mongoose.Types.ObjectId;
     }
-    payment[0].status = 'COMPLETED';
-    await payment[0].save({ session });
+    paymentRecord[0].status = 'COMPLETED';
+    await paymentRecord[0].save({ session });
 
     await session.commitTransaction();
     session.endSession();
@@ -116,7 +290,7 @@ export const createPayment = async (req: Request, res: Response) => {
       success: true,
       message: 'Payment processed successfully',
       data: {
-        payment: payment[0],
+        payment: paymentRecord[0],
         newBalance: account.balance,
       },
     });
@@ -140,6 +314,14 @@ export const createPayment = async (req: Request, res: Response) => {
 export const getPayments = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: 'User not authenticated',
+      });
+    }
+
     const { limit = 10, page = 1, status, accountId } = req.query;
 
     const pageNum = parseInt(page as string, 10);
@@ -151,9 +333,11 @@ export const getPayments = async (req: Request, res: Response) => {
 
     if (
       status &&
-      ['pending', 'completed', 'failed', 'cancelled'].includes(status as string)
+      ['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(
+        (status as string).toUpperCase()
+      )
     ) {
-      filter.status = status;
+      filter.status = (status as string).toUpperCase();
     }
 
     if (accountId && mongoose.Types.ObjectId.isValid(accountId as string)) {
@@ -164,7 +348,18 @@ export const getPayments = async (req: Request, res: Response) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
-      .populate('accountId', 'accountNumber name');
+      .populate('accountId', 'accountNumber name')
+      .populate('billerId', 'name logo category');
+
+    if (payments.length === 0) {
+      return res.status(StatusCodes.OK).json({
+        success: true,
+        count: 0,
+        totalPages: 0,
+        currentPage: pageNum,
+        data: { payments: [] },
+      });
+    }
 
     const total = await Payment.countDocuments(filter);
 
@@ -194,6 +389,13 @@ export const getPayment = async (req: Request, res: Response) => {
     const userId = req.user?.id;
     const { id } = req.params;
 
+    if (!userId) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: 'User not authenticated',
+      });
+    }
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
@@ -201,10 +403,9 @@ export const getPayment = async (req: Request, res: Response) => {
       });
     }
 
-    const payment = await Payment.findOne({ _id: id, userId }).populate(
-      'accountId',
-      'accountNumber name'
-    );
+    const payment = await Payment.findOne({ _id: id, userId })
+      .populate('accountId', 'accountNumber name')
+      .populate('billerId', 'name logo category accountNumberLabel');
 
     if (!payment) {
       return res.status(StatusCodes.NOT_FOUND).json({
@@ -235,6 +436,13 @@ export const cancelPayment = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { id } = req.params;
+
+    if (!userId) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: 'User not authenticated',
+      });
+    }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCodes.BAD_REQUEST).json({

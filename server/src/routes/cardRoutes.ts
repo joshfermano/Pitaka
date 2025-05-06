@@ -5,6 +5,7 @@ import {
   addCard,
   updateCard,
   deleteCard,
+  getCardWithFullDetails,
 } from '../controllers/cardController';
 import { protect } from '../middlewares/authMiddleware';
 
@@ -18,6 +19,12 @@ router.get('/', getUserCards as unknown as RequestHandler);
 
 // Get a specific card
 router.get('/:id', getCardById as unknown as RequestHandler);
+
+// Get a specific card with full details (including card number)
+router.get(
+  '/:id/fulldetails',
+  getCardWithFullDetails as unknown as RequestHandler
+);
 
 // Add a new card
 router.post('/', addCard as unknown as RequestHandler);

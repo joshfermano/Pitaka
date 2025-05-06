@@ -17,9 +17,11 @@ import {
   savingsRoutes,
   investmentRoutes,
   cardRoutes,
+  transferRoutes,
+  userRoutes,
 } from './routes';
 
-const PORT = process.env.PORT || 6000;
+const PORT = process.env.PORT || 5000;
 
 const app = express();
 
@@ -113,6 +115,8 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/savings', savingsRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/cards', cardRoutes);
+app.use('/api/transfers', transferRoutes);
+app.use('/api/users', userRoutes);
 
 // Simple status route to check if the server is running
 app.get('/api/status', (req, res) => {

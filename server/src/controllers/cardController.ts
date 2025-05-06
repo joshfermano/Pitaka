@@ -85,13 +85,54 @@ export const addCard = async (req: Request, res: Response) => {
       isDefault,
     } = req.body;
 
-    console.log(`Adding new card for user ${userId}`);
+    console.log(`Adding new card for user ${userId} with data:`, {
+      cardholderName,
+      expiryMonth,
+      expiryYear,
+      isDefault,
+      // Log masked values for sensitive fields
+      cardNumber: cardNumber ? '****' + cardNumber.slice(-4) : 'undefined',
+      cvv: cvv ? '***' : 'undefined',
+    });
 
     // Check if required fields are present
     if (!cardNumber || !cardholderName || !expiryMonth || !expiryYear || !cvv) {
+      console.error('Missing required card information', {
+        hasCardNumber: !!cardNumber,
+        hasCardholderName: !!cardholderName,
+        hasExpiryMonth: !!expiryMonth,
+        hasExpiryYear: !!expiryYear,
+        hasCvv: !!cvv,
+      });
+
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Please provide all required card information',
+      });
+    }
+
+    // Validate month format (01-12)
+    const monthNum = parseInt(expiryMonth, 10);
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid expiry month. Must be between 01-12',
+      });
+    }
+
+    // Format month as two digits
+    const formattedMonth = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
+
+    // Validate year format (2-digit year)
+    const yearNum = parseInt(expiryYear, 10);
+    const currentYear = new Date().getFullYear() % 100;
+
+    if (isNaN(yearNum) || yearNum < currentYear || yearNum > currentYear + 20) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: `Invalid expiry year. Must be between ${currentYear} and ${
+          currentYear + 20
+        }`,
       });
     }
 
@@ -104,36 +145,104 @@ export const addCard = async (req: Request, res: Response) => {
       });
     }
 
+    // Validate CVV based on card type
+    const cvvRegex = cardType === CardType.AMEX ? /^\d{4}$/ : /^\d{3}$/;
+    if (!cvvRegex.test(cvv)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message:
+          cardType === CardType.AMEX
+            ? 'AMEX cards require a 4-digit CVV'
+            : 'CVV must be 3 digits',
+      });
+    }
+
     // If this card is default, unset default for other cards
     if (isDefault) {
       await Card.updateMany({ userId }, { isDefault: false });
     }
 
+    // Create masked number
+    const digits = cardNumber.replace(/\D/g, '');
+    const last4 = digits.slice(-4);
+    const maskedNumber =
+      cardType === CardType.AMEX
+        ? `•••• •••••• ${last4}`
+        : `•••• •••• •••• ${last4}`;
+
     // Create new card
-    const card = await Card.create({
-      userId,
-      cardNumber,
-      cardholderName,
-      expiryMonth,
-      expiryYear,
-      cvv,
-      type: cardType,
-      isDefault: isDefault || false,
-    });
+    try {
+      const cardData = {
+        userId,
+        cardNumber,
+        maskedNumber,
+        cardholderName,
+        expiryMonth: formattedMonth, // Use the formatted month
+        expiryYear,
+        cvv,
+        type: cardType,
+        isDefault: isDefault || false,
+      };
 
-    // Don't return sensitive data
-    const sanitizedCard = await Card.findById(card._id).select('-cvv');
+      console.log('Attempting to create card with data:', {
+        userId,
+        cardholderName,
+        expiryMonth: formattedMonth,
+        expiryYear,
+        type: cardType,
+        isDefault: isDefault || false,
+        // Log masked values for sensitive fields
+        maskedNumber,
+        cardNumber: '****' + cardNumber.slice(-4),
+        cvv: cvv
+          ? `${'*'.repeat(cvv.length - 1)}${cvv.slice(-1)}`
+          : 'undefined',
+        cvvLength: cvv ? cvv.length : 0,
+      });
 
-    console.log(`Card added successfully for user ${userId}`);
-    res.status(StatusCodes.CREATED).json({
-      success: true,
-      message: 'Card added successfully',
-      data: { card: sanitizedCard },
-    });
+      const card = await Card.create(cardData);
+
+      // Don't return sensitive data
+      const sanitizedCard = await Card.findById(card._id).select(
+        '-cvv -cardNumber'
+      );
+
+      console.log(`Card added successfully for user ${userId}`);
+      res.status(StatusCodes.CREATED).json({
+        success: true,
+        message: 'Card added successfully',
+        data: { card: sanitizedCard },
+      });
+    } catch (validationError: any) {
+      console.error('Validation error during card creation:', validationError);
+
+      if (validationError.name === 'ValidationError') {
+        console.error(
+          'Card validation errors details:',
+          JSON.stringify(validationError.errors, null, 2)
+        );
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: 'Card validation failed',
+          error: validationError.message,
+          details: Object.keys(validationError.errors || {}).reduce(
+            (acc, field) => {
+              acc[field] = validationError.errors[field].message;
+              return acc;
+            },
+            {} as Record<string, string>
+          ),
+        });
+      }
+
+      throw validationError; // Re-throw for the outer catch
+    }
   } catch (error: any) {
     console.error('Error adding card:', error);
+
     // Check for validation errors
     if (error.name === 'ValidationError') {
+      console.error('Validation error details:', error.errors);
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Validation error',
@@ -271,6 +380,75 @@ export const deleteCard = async (req: Request, res: Response) => {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Failed to delete card',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get a specific card by ID with full card number (for authorized operations)
+ * @route GET /api/cards/:id/fulldetails
+ * @access Private
+ */
+export const getCardWithFullDetails = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const cardId = req.params.id;
+
+    console.log(
+      `Getting full card details for card ${cardId} (user ${userId})`
+    );
+
+    // Additional security checks could be implemented here
+    // For example: require re-authentication, check device trust, etc.
+
+    const card = await Card.findOne({ _id: cardId, userId });
+
+    if (!card) {
+      console.log(`Card ${cardId} not found for user ${userId}`);
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: 'Card not found',
+      });
+    }
+
+    // Format card number with spaces for readability
+    let formattedCardNumber = '';
+    const digits = card.cardNumber.replace(/\D/g, '');
+
+    if (card.type === CardType.AMEX) {
+      formattedCardNumber = [
+        digits.substring(0, 4),
+        digits.substring(4, 10),
+        digits.substring(10),
+      ].join(' ');
+    } else {
+      formattedCardNumber = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+    }
+
+    const secureResponse = {
+      _id: card._id,
+      cardNumber: formattedCardNumber,
+      maskedNumber: card.maskedNumber,
+      expiryMonth: card.expiryMonth,
+      expiryYear: card.expiryYear,
+      type: card.type,
+    };
+
+    // Log the access for security auditing
+    console.log(
+      `Full card details retrieved for card ${cardId} by user ${userId}`
+    );
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: { card: secureResponse },
+    });
+  } catch (error: any) {
+    console.error('Error fetching full card details:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch card details',
       error: error.message,
     });
   }

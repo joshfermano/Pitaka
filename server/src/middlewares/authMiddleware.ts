@@ -8,6 +8,7 @@ declare global {
     interface Request {
       user?: {
         id: string;
+        _id: string;
         email: string;
         role: string;
       };
@@ -66,8 +67,9 @@ export const protect = async (
         role?: string;
       };
 
-      // Set user info in request
+      // Set user info in request - Note: We set both id and _id to ensure compatibility
       req.user = {
+        _id: decoded.id,
         id: decoded.id,
         email: decoded.email,
         role: decoded.role || 'user', // Default role if not in token

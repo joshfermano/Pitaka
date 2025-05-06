@@ -77,9 +77,9 @@ const CardSchema = new Schema<ICard, CardModel>(
       validate: {
         validator: function (v: string) {
           const month = parseInt(v);
-          return month >= 1 && month <= 12;
+          return !isNaN(month) && month >= 1 && month <= 12;
         },
-        message: 'Invalid expiry month',
+        message: 'Invalid expiry month. Must be between 01-12',
       },
     },
     expiryYear: {
@@ -90,9 +90,14 @@ const CardSchema = new Schema<ICard, CardModel>(
         validator: function (v: string) {
           const year = parseInt(v);
           const currentYear = new Date().getFullYear() % 100; // Get last two digits
-          return year >= currentYear && year <= currentYear + 20;
+          return (
+            !isNaN(year) && year >= currentYear && year <= currentYear + 20
+          );
         },
-        message: 'Invalid expiry year',
+        message: (props) =>
+          `Invalid expiry year. Must be between ${
+            new Date().getFullYear() % 100
+          } and ${(new Date().getFullYear() % 100) + 20}`,
       },
     },
     cvv: {
@@ -101,9 +106,14 @@ const CardSchema = new Schema<ICard, CardModel>(
       trim: true,
       validate: {
         validator: function (v: string) {
-          return /^\d{3,4}$/.test(v);
+          // Determine the required CVV length based on card type
+          // Access the document with 'this' context
+          const cardDoc = this as unknown as ICard;
+          const requiredLength = cardDoc.type === CardType.AMEX ? 4 : 3;
+          return new RegExp(`^\\d{${requiredLength}}$`).test(v);
         },
-        message: 'CVV must be 3 or 4 digits',
+        message:
+          'CVV must be the correct length (3 digits, or 4 for AMEX cards)',
       },
     },
     type: {

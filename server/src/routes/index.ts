@@ -6,6 +6,8 @@ import loanRoutes from './loanRoutes';
 import savingsRoutes from './savingsRoutes';
 import investmentRoutes from './investmentRoutes';
 import cardRoutes from './cardRoutes';
+import transferRoutes from './transferRoutes';
+import userRoutes from './userRoutes';
 
 export {
   authRoutes,
@@ -16,4 +18,6 @@ export {
   savingsRoutes,
   investmentRoutes,
   cardRoutes,
+  transferRoutes,
+  userRoutes,
 };

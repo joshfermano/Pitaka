@@ -45,14 +45,43 @@ const createToken = (userId: string, email: string, role: string = 'user') => {
 export const register = async (req: Request, res: Response) => {
   try {
     console.log('Register request received with body:', req.body);
-    const { email, password, firstName, lastName, phoneNumber } = req.body;
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      username,
+      phoneNumber,
+      dateOfBirth,
+      address,
+    } = req.body;
 
     // Validate input
     if (!email || !password || !firstName || !lastName) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: 'Please provide all required fields',
+        message:
+          'Please provide all required fields: email, password, firstName, lastName',
         error: 'Missing required fields',
+      });
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'Password must be at least 6 characters long',
+        error: 'Invalid password',
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'Please provide a valid email address',
+        error: 'Invalid email format',
       });
     }
 
@@ -68,19 +97,19 @@ export const register = async (req: Request, res: Response) => {
 
     // Create new user
     const user = await User.create({
-      username: email.split('@')[0], // Generate username from email
+      username: username || email.split('@')[0], // Use provided username or generate from email
       email,
       password, // Password will be hashed in the pre-save hook
       firstName,
       lastName,
-      phoneNumber: phoneNumber || '0000000000', // Use provided phone number or default
-      dateOfBirth: new Date('2000-01-01'), // Default value
+      phoneNumber: phoneNumber || '0000000000',
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date('2000-01-01'),
       address: {
-        street: 'Default Street',
-        city: 'Default City',
-        state: 'Default State',
-        zipCode: '00000',
-        country: 'Default Country',
+        street: address?.street || 'Default Street',
+        city: address?.city || 'Default City',
+        state: address?.state || 'Default State',
+        zipCode: address?.zipCode || '00000',
+        country: address?.country || 'Default Country',
       },
     });
 
@@ -247,11 +276,25 @@ export const getProfile = async (req: Request, res: Response) => {
       });
     }
 
+    const account = await Account.findOne({
+      userId,
+      type: 'MAIN',
+    }).select('_id accountNumber balance type name');
+
     console.log('Profile retrieved successfully for user:', userId);
     res.status(StatusCodes.OK).json({
       success: true,
       data: {
         user,
+        mainAccount: account
+          ? {
+              id: account._id,
+              accountNumber: account.accountNumber,
+              name: account.name || account.type,
+              balance: account.balance,
+              type: account.type,
+            }
+          : null,
       },
     });
   } catch (error: any) {
@@ -347,6 +390,92 @@ export const logout = async (req: Request, res: Response) => {
       success: false,
       message: 'Failed to logout',
       error: error.message,
+    });
+  }
+};
+
+// Refresh token
+export const refreshToken = async (req: Request, res: Response) => {
+  try {
+    // Get token from header
+    let token;
+    const authHeader = req.headers.authorization;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.cookies?.token) {
+      token = req.cookies.token;
+    }
+
+    if (!token) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: 'No token provided. Please log in again.',
+      });
+    }
+
+    // Verify token
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'Server configuration error. JWT secret is missing.',
+      });
+    }
+
+    try {
+      // Decode token
+      const decoded = jwt.verify(token, jwtSecret) as {
+        id: string;
+        email: string;
+      };
+
+      // Find user to make sure they still exist
+      const user = await User.findById(decoded.id);
+      if (!user) {
+        return res.status(StatusCodes.UNAUTHORIZED).json({
+          success: false,
+          message: 'User not found. Please log in again.',
+        });
+      }
+
+      // Generate new token
+      const newToken = jwt.sign(
+        { id: user._id, email: user.email },
+        jwtSecret,
+        { expiresIn: '24h' }
+      );
+
+      // Set token in cookie for web clients
+      if (req.cookies) {
+        res.cookie('token', newToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        });
+      }
+
+      // Return the new token
+      return res.status(StatusCodes.OK).json({
+        success: true,
+        data: {
+          token: newToken,
+          expiresIn: 24 * 60 * 60, // 24 hours in seconds
+        },
+        message: 'Token refreshed successfully',
+      });
+    } catch (error) {
+      console.error('Token verification error:', error);
+      return res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        message: 'Invalid or expired token. Please log in again.',
+      });
+    }
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to refresh token. Please try again.',
     });
   }
 };

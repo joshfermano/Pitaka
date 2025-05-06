@@ -30,6 +30,17 @@ export interface IInvestment extends Document {
   updatedAt: Date;
 }
 
+export interface IPriceAlert extends Document {
+  userId: mongoose.Types.ObjectId;
+  companyId: mongoose.Types.ObjectId;
+  type: 'PRICE_ABOVE' | 'PRICE_BELOW';
+  value: number;
+  active: boolean;
+  triggered: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 const CompanySchema: Schema = new Schema(
   {
     name: {
@@ -134,6 +145,41 @@ const InvestmentSchema: Schema = new Schema(
   }
 );
 
+const PriceAlertSchema: Schema = new Schema(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    companyId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Company',
+      required: true,
+    },
+    type: {
+      type: String,
+      enum: ['PRICE_ABOVE', 'PRICE_BELOW'],
+      required: true,
+    },
+    value: {
+      type: Number,
+      required: true,
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
+    triggered: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
 // Method to update investment values based on current company price
 InvestmentSchema.methods.updateValues = async function (this: IInvestment) {
   try {
@@ -153,4 +199,8 @@ export const Company = mongoose.model<ICompany>('Company', CompanySchema);
 export const Investment = mongoose.model<IInvestment>(
   'Investment',
   InvestmentSchema
+);
+export const PriceAlert = mongoose.model<IPriceAlert>(
+  'PriceAlert',
+  PriceAlertSchema
 );

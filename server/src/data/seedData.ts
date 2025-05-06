@@ -1,144 +1,38 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 import * as models from '../models';
 
 /**
- * Seed the database with initial data for testing
+ * Seed the database with initial data for Companies, LoanProducts, Banks, and Billers
  */
 export const seedDatabase = async (): Promise<void> => {
   try {
-    const userCount = await models.User.countDocuments();
-    if (userCount > 0) {
-      console.log('Database already seeded. Skipping seeding process.');
+    console.log(
+      '🌱 Starting focused seeding for Companies, LoanProducts, Banks, and Billers...'
+    );
+
+    // Check if data already exists
+    const companyCount = await models.Company.countDocuments();
+    const loanProductCount = await models.LoanProduct.countDocuments();
+    const bankCount = await models.Bank.countDocuments();
+    const billerCount = await models.Biller.countDocuments();
+
+    if (
+      companyCount > 0 &&
+      loanProductCount > 0 &&
+      bankCount > 0 &&
+      billerCount > 0
+    ) {
+      console.log(
+        'Database already contains seed data. Skipping seeding process.'
+      );
       return;
     }
 
-    console.log('🌱 Seeding database with initial data...');
-
-    // Create users
-    const password = await bcrypt.hash('password123', 10);
-
-    const users = await models.User.create([
-      {
-        username: 'joshfermano',
-        email: 'josh@example.com',
-        password,
-        firstName: 'Josh Khovick',
-        lastName: 'Fermano',
-        phoneNumber: '+63 912 345 6789',
-        dateOfBirth: new Date('1990-01-01'),
-        address: {
-          street: '123 Main St',
-          city: 'Manila',
-          state: 'Metro Manila',
-          zipCode: '1000',
-          country: 'Philippines',
-        },
-      },
-      {
-        username: 'mariasantos',
-        email: 'maria.santos@example.com',
-        password,
-        firstName: 'Maria',
-        lastName: 'Santos',
-        phoneNumber: '+63 923 456 7890',
-        dateOfBirth: new Date('1992-05-15'),
-        address: {
-          street: '456 Rizal Ave',
-          city: 'Quezon City',
-          state: 'Metro Manila',
-          zipCode: '1100',
-          country: 'Philippines',
-        },
-      },
-    ]);
-
-    // Create accounts
-    const mainAccount1 = await models.Account.create({
-      userId: users[0]._id,
-      accountNumber: '1234567890',
-      type: models.AccountType.MAIN,
-      name: 'Main Account',
-      balance: 100000,
-      currency: '₱',
-    });
-
-    const savingsAccount1 = await models.Account.create({
-      userId: users[0]._id,
-      accountNumber: '0987654321',
-      type: models.AccountType.SAVINGS,
-      name: 'Emergency Fund',
-      balance: 50000,
-      currency: '₱',
-    });
-
-    const investmentAccount1 = await models.Account.create({
-      userId: users[0]._id,
-      accountNumber: '6789012345',
-      type: models.AccountType.INVESTMENT,
-      name: 'Investment Account',
-      balance: 75000,
-      currency: '₱',
-    });
-
-    const mainAccount2 = await models.Account.create({
-      userId: users[1]._id,
-      accountNumber: '5432167890',
-      type: models.AccountType.MAIN,
-      name: 'Main Account',
-      balance: 80000,
-      currency: '₱',
-    });
-
-    // Create savings accounts
-    await models.SavingsAccount.create({
-      userId: users[0]._id,
-      accountId: savingsAccount1._id,
-      name: 'Dream Vacation',
-      icon: 'airplane',
-      currentAmount: 25000,
-      targetAmount: 50000,
-      endDate: new Date('2023-12-31'),
-      interestRate: 0.05,
-      transactions: [
-        {
-          date: new Date('2023-01-15'),
-          amount: 10000,
-          type: models.SavingsTransactionType.DEPOSIT,
-        },
-        {
-          date: new Date('2023-02-15'),
-          amount: 5000,
-          type: models.SavingsTransactionType.DEPOSIT,
-        },
-        {
-          date: new Date('2023-03-15'),
-          amount: 5000,
-          type: models.SavingsTransactionType.DEPOSIT,
-        },
-        {
-          date: new Date('2023-04-15'),
-          amount: 5000,
-          type: models.SavingsTransactionType.DEPOSIT,
-        },
-        {
-          date: new Date('2023-04-30'),
-          amount: 125,
-          type: models.SavingsTransactionType.INTEREST,
-        },
-      ],
-      autoTransfer: {
-        enabled: true,
-        amount: 5000,
-        frequency: 'MONTHLY',
-        nextDate: new Date('2023-05-15'),
-      },
-      notes: 'Saving for a trip to Japan in December',
-    });
-
     // Create companies for investments
-    const companies = await models.Company.create([
+    if (companyCount === 0) {
+      const companies = [
       {
+          _id: new mongoose.Types.ObjectId(),
         name: 'PLDT Inc.',
         symbol: 'TEL',
         currentPrice: 1250.5,
@@ -148,6 +42,17 @@ export const seedDatabase = async (): Promise<void> => {
         sector: 'Telecommunications',
       },
       {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Ayala Corporation',
+          symbol: 'AC',
+          currentPrice: 752.0,
+          previousClose: 755.0,
+          change: -3.0,
+          changePercent: -0.4,
+          sector: 'Holding Firms',
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
         name: 'SM Investments',
         symbol: 'SM',
         currentPrice: 925.0,
@@ -157,6 +62,17 @@ export const seedDatabase = async (): Promise<void> => {
         sector: 'Holding Firms',
       },
       {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'BDO Unibank',
+          symbol: 'BDO',
+          currentPrice: 135.2,
+          previousClose: 133.8,
+          change: 1.4,
+          changePercent: 1.05,
+          sector: 'Financials',
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
         name: 'Jollibee Foods',
         symbol: 'JFC',
         currentPrice: 186.5,
@@ -165,35 +81,17 @@ export const seedDatabase = async (): Promise<void> => {
         changePercent: 0.92,
         sector: 'Consumer Services',
       },
-    ]);
+      ];
 
-    await models.Investment.create([
-      {
-        userId: users[0]._id,
-        companyId: companies[0]._id,
-        shares: 10,
-        amount: 12000.0,
-        purchaseDate: new Date('2023-05-15'),
-        purchasePrice: 1200.0,
-        currentValue: 12505.0,
-        profit: 505.0,
-        profitPercent: 4.21,
-      },
-      {
-        userId: users[0]._id,
-        companyId: companies[1]._id,
-        shares: 15,
-        amount: 13500.0,
-        purchaseDate: new Date('2023-06-22'),
-        purchasePrice: 900.0,
-        currentValue: 13875.0,
-        profit: 375.0,
-        profitPercent: 2.78,
-      },
-    ]);
+      await models.Company.create(companies);
+      console.log('✅ Companies seeded successfully');
+    }
 
-    const loanProducts = await models.LoanProduct.create([
-      {
+    // Create loan products
+    if (loanProductCount === 0) {
+      const loanProducts = [
+        {
+          _id: new mongoose.Types.ObjectId(),
         title: 'Personal Loan',
         interest: '10.5% p.a.',
         minAmount: 10000,
@@ -220,6 +118,16 @@ export const seedDatabase = async (): Promise<void> => {
             description:
               'Our competitive interest rates start at 10.5% per annum.',
           },
+            {
+              title: 'Quick Approval',
+              description:
+                'Get a decision within 24-48 hours after complete submission.',
+            },
+            {
+              title: 'No Collateral Required',
+              description:
+                "Unsecured loan option that doesn't require any collateral.",
+          },
         ],
         eligibility: [
           'Filipino citizen or resident foreigner',
@@ -232,6 +140,7 @@ export const seedDatabase = async (): Promise<void> => {
           'Proof of income (latest 3 months pay slips)',
           'Certificate of Employment',
           'Latest 3 months bank statements',
+            'Proof of billing (utility bill under your name)',
         ],
         faq: [
           {
@@ -244,9 +153,83 @@ export const seedDatabase = async (): Promise<void> => {
             answer:
               'Upon complete submission of requirements, the approval process typically takes 24-48 hours.',
           },
+            {
+              question: 'Are there any pre-payment penalties?',
+              answer:
+                'We allow early repayment with minimal fees. A fee of 5% of the remaining principal balance will apply.',
+            },
+          ],
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          title: 'Home Loan',
+          interest: '5.75% p.a.',
+          minAmount: 500000,
+          maxAmount: 10000000,
+          term: '5-30 years',
+          icon: 'home-variant',
+          color: '#059669',
+          description:
+            "Make your dream home a reality with our competitive home loan options. Whether you're buying your first home, refinancing, or investing in property, we have solutions tailored to your needs.",
+          requirements: [
+            'Must be 21-65 years old',
+            'Minimum monthly income of ₱30,000',
+            'Must be a Filipino citizen or resident foreigner',
+            'Property must be in the Philippines',
+          ],
+          features: [
+            {
+              title: 'Long-term Financing',
+              description:
+                'Flexible terms from 5 to 30 years to fit your financial situation.',
+            },
+            {
+              title: 'Low Interest Rates',
+              description:
+                'Competitive interest rates starting from 5.75% per annum.',
+            },
+            {
+              title: 'High Loan Amount',
+              description:
+                'Borrow up to ₱10,000,000 depending on property value and income.',
+            },
+            {
+              title: 'Multiple Property Types',
+              description:
+                'Finance single-family homes, condominiums, townhouses, and more.',
+            },
+          ],
+          eligibility: [
+            'Filipino citizen or resident foreigner',
+            'Age 21-65 years old',
+            'Regular employment with at least 2 years tenure',
+            'Minimum monthly income of ₱30,000',
+            'Good credit history',
+          ],
+          documents: [
+            'Valid government-issued ID',
+            'Proof of income (latest 3 months pay slips)',
+            'Income tax returns for the past 2 years',
+            'Certificate of Employment',
+            'Latest 6 months bank statements',
+            'Property documents (title, tax declaration, etc.)',
+          ],
+          faq: [
+            {
+              question: 'What is the loan-to-value ratio?',
+              answer:
+                'We offer up to 80% financing of the appraised property value.',
+            },
+            {
+              question:
+                'Can I apply for a home loan for a property under construction?',
+              answer:
+                'Yes, we offer construction loans with progressive release of funds based on construction milestones.',
+          },
         ],
       },
       {
+          _id: new mongoose.Types.ObjectId(),
         title: 'Auto Loan',
         interest: '7.25% p.a.',
         minAmount: 100000,
@@ -297,83 +280,146 @@ export const seedDatabase = async (): Promise<void> => {
           },
         ],
       },
-    ]);
+      ];
 
-    // Create active loans
-    const personalLoan = await models.Loan.create({
-      userId: users[0]._id,
-      loanProductId: loanProducts[0]._id,
-      title: 'Personal Loan',
-      amount: 250000,
-      paid: 75000,
-      remaining: 175000,
-      nextPayment: 8750,
-      dueDate: new Date('2023-10-15'),
-      progress: 30,
-      disbursementDate: new Date('2023-03-15'),
-      term: '36 months',
-      interest: '10.5%',
-      status: 'ACTIVE',
-      accountNumber: '1234-5678-9012',
-      approvalDate: new Date('2023-03-10'),
-      paymentFrequency: 'MONTHLY',
-      payments: [],
-    });
+      await models.LoanProduct.create(loanProducts);
+      console.log('✅ Loan Products seeded successfully');
+    }
 
-    // Create loan payments
-    const loanPayments = await models.LoanPayment.create([
-      {
-        loanId: personalLoan._id,
-        amount: 8750,
-        date: new Date('2023-09-15'),
-        status: 'COMPLETED',
-      },
-      {
-        loanId: personalLoan._id,
-        amount: 8750,
-        date: new Date('2023-08-15'),
-        status: 'COMPLETED',
-      },
-      {
-        loanId: personalLoan._id,
-        amount: 8750,
-        date: new Date('2023-07-15'),
-        status: 'COMPLETED',
-      },
-      {
-        loanId: personalLoan._id,
-        amount: 8750,
-        date: new Date('2023-06-15'),
-        status: 'COMPLETED',
-      },
-      {
-        loanId: personalLoan._id,
-        amount: 8750,
-        date: new Date('2023-05-15'),
-        status: 'COMPLETED',
-      },
-      {
-        loanId: personalLoan._id,
-        amount: 8750,
-        date: new Date('2023-04-15'),
-        status: 'COMPLETED',
-      },
-      {
-        loanId: personalLoan._id,
-        amount: 8750,
-        date: new Date('2023-03-15'),
-        status: 'COMPLETED',
-      },
-    ]);
+    // Create banks
+    if (bankCount === 0) {
+      const banks = [
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Banco De Oro (BDO)',
+          code: 'BDO',
+          logo: 'bdo',
+          country: 'Philippines',
+          swiftCode: 'BNORPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Bank of the Philippine Islands (BPI)',
+          code: 'BPI',
+          logo: 'bpi',
+          country: 'Philippines',
+          swiftCode: 'BOPIPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Metrobank',
+          code: 'MBTC',
+          logo: 'metrobank',
+          country: 'Philippines',
+          swiftCode: 'MBTCPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'UnionBank',
+          code: 'UBP',
+          logo: 'unionbank',
+          country: 'Philippines',
+          swiftCode: 'UBPHPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Security Bank',
+          code: 'SECB',
+          logo: 'securitybank',
+          country: 'Philippines',
+          swiftCode: 'SETCPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Philippine National Bank (PNB)',
+          code: 'PNB',
+          logo: 'pnb',
+          country: 'Philippines',
+          swiftCode: 'PNBMPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Landbank of the Philippines',
+          code: 'LBP',
+          logo: 'landbank',
+          country: 'Philippines',
+          swiftCode: 'TLBPPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Rizal Commercial Banking Corporation (RCBC)',
+          code: 'RCBC',
+          logo: 'rcbc',
+          country: 'Philippines',
+          swiftCode: 'RCBCPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Eastwest Bank',
+          code: 'EWB',
+          logo: 'eastwest',
+          country: 'Philippines',
+          swiftCode: 'EWBCPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'China Banking Corporation (Chinabank)',
+          code: 'CBC',
+          logo: 'chinabank',
+          country: 'Philippines',
+          swiftCode: 'CHBKPHMM',
+          transferFees: {
+            domestic: 25,
+            international: 250,
+          },
+        },
+      ];
 
-    // Update loan with payments
-    await models.Loan.findByIdAndUpdate(personalLoan._id, {
-      payments: loanPayments.map((payment) => payment._id),
-    });
+      await models.Bank.create(banks);
+      console.log('✅ Banks seeded successfully');
+    }
 
     // Create billers
-    const billers = await models.Biller.create([
+    if (billerCount === 0) {
+      const billers = [
       {
+          _id: new mongoose.Types.ObjectId(),
         name: 'Meralco',
         category: models.BillerCategory.ELECTRICITY,
         logo: 'meralco',
@@ -386,6 +432,7 @@ export const seedDatabase = async (): Promise<void> => {
         popularIndex: 1,
       },
       {
+          _id: new mongoose.Types.ObjectId(),
         name: 'Maynilad',
         category: models.BillerCategory.WATER,
         logo: 'maynilad',
@@ -397,6 +444,19 @@ export const seedDatabase = async (): Promise<void> => {
         popularIndex: 2,
       },
       {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Manila Water',
+          category: models.BillerCategory.WATER,
+          logo: 'manilaWater',
+          accountNumberLabel: 'Contract Account Number',
+          accountNumberMask: '##########',
+          accountNumberLength: 10,
+          minimumAmount: 50,
+          maximumAmount: 30000,
+          popularIndex: 3,
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
         name: 'Netflix',
         category: models.BillerCategory.ENTERTAINMENT,
         logo: 'netflix',
@@ -405,110 +465,45 @@ export const seedDatabase = async (): Promise<void> => {
         maximumAmount: 549,
         popularIndex: 4,
       },
-    ]);
-
-    // Create recent transactions
-    await models.Transaction.create([
-      {
-        transactionId: 'TXN123456789',
-        type: models.TransactionType.PAYMENT,
-        amount: 5.99,
-        fee: 0,
-        fromAccount: mainAccount1._id,
-        description: 'App Store Purchase',
-        status: models.TransactionStatus.COMPLETED,
-        merchantName: 'Apple Store',
-        merchantLogo: 'apple',
-        merchantCategory: 'Entertainment',
-        date: new Date('2023-07-15T14:30:00Z'),
-        currency: '₱',
-      },
-      {
-        transactionId: 'TXN123456790',
-        type: models.TransactionType.DEPOSIT,
-        amount: 10000,
-        fee: 0,
-        toAccount: mainAccount1._id,
-        description: 'Salary Deposit',
-        status: models.TransactionStatus.COMPLETED,
-        date: new Date('2023-07-01T09:00:00Z'),
-        currency: '₱',
-      },
-      {
-        transactionId: 'TXN123456791',
-        type: models.TransactionType.TRANSFER,
-        amount: 5000,
-        fee: 0,
-        fromAccount: mainAccount1._id,
-        toAccount: savingsAccount1._id,
-        description: 'Transfer to Savings',
-        status: models.TransactionStatus.COMPLETED,
-        date: new Date('2023-07-02T11:45:00Z'),
-        currency: '₱',
-      },
-      {
-        transactionId: 'TXN123456792',
-        type: models.TransactionType.WITHDRAWAL,
-        amount: 2000,
-        fee: 0,
-        fromAccount: mainAccount1._id,
-        description: 'ATM Withdrawal',
-        status: models.TransactionStatus.COMPLETED,
-        date: new Date('2023-07-05T15:30:00Z'),
-        currency: '₱',
-      },
-      {
-        transactionId: 'TXN123456793',
-        type: models.TransactionType.LOAN_DISBURSEMENT,
-        amount: 250000,
-        fee: 2500,
-        toAccount: mainAccount1._id,
-        description: 'Personal Loan Disbursement',
-        status: models.TransactionStatus.COMPLETED,
-        date: new Date('2023-03-15T10:00:00Z'),
-        currency: '₱',
-        loanId: personalLoan._id,
-        loanDetails: {
-          loanType: 'Personal Loan',
-          principalAmount: 250000,
-          interestRate: '10.5%',
-          term: '36 months',
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Spotify',
+          category: models.BillerCategory.ENTERTAINMENT,
+          logo: 'spotify',
+          accountNumberLabel: 'Email Address',
+          minimumAmount: 129,
+          maximumAmount: 194,
+          popularIndex: 5,
         },
-      },
-    ]);
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Apple',
+          category: models.BillerCategory.ENTERTAINMENT,
+          logo: 'apple',
+          accountNumberLabel: 'Apple ID',
+          minimumAmount: 50,
+          maximumAmount: 10000,
+          popularIndex: 6,
+        },
+        {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Goodhands Insurance',
+          category: models.BillerCategory.INSURANCE,
+          logo: 'goodhands',
+          accountNumberLabel: 'Policy Number',
+          accountNumberMask: 'GH-########',
+          accountNumberLength: 10,
+          minimumAmount: 500,
+          maximumAmount: 50000,
+          popularIndex: 7,
+        },
+      ];
 
-    // Create transfer recipients
-    const transferRecipients = await models.TransferRecipient.create([
-      {
-        userId: users[0]._id,
-        name: 'Maria Santos',
-        accountNumber: '5432167890',
-        isFavorite: true,
-      },
-      {
-        userId: users[0]._id,
-        name: 'Ana Reyes',
-        accountNumber: '2345678901',
-        bankName: 'BDO',
-        bankCode: 'BDO',
-        isFavorite: true,
-      },
-    ]);
+      await models.Biller.create(billers);
+      console.log('✅ Billers seeded successfully');
+    }
 
-    // Create cards
-    await models.Card.create({
-      userId: users[0]._id,
-      cardNumber: '4111111111111111', // Valid VISA test number
-      maskedNumber: '•••• •••• •••• 1111',
-      cardholderName: 'JOSH FERMANO',
-      expiryMonth: '09',
-      expiryYear: '25',
-      cvv: '123',
-      type: models.CardType.VISA,
-      isDefault: true,
-    });
-
-    console.log('✅ Database seeded successfully');
+    console.log('✅ Focused database seeding completed successfully');
   } catch (error) {
     console.error('Error seeding database:', error);
     throw error;

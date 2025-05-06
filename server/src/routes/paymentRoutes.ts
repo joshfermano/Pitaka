@@ -1,11 +1,32 @@
 import express from 'express';
-import { paymentController } from '../controllers';
+import * as paymentController from '../controllers/paymentController';
 import { protect } from '../middlewares/authMiddleware';
 import { RequestHandler } from 'express';
 
 const router = express.Router();
 
-// All routes are protected
+// Public biller routes (no auth required)
+router.get(
+  '/billers',
+  paymentController.getAllBillers as unknown as RequestHandler
+);
+
+router.get(
+  '/billers/popular',
+  paymentController.getPopularBillers as unknown as RequestHandler
+);
+
+router.get(
+  '/billers/category/:category',
+  paymentController.getBillersByCategory as unknown as RequestHandler
+);
+
+router.get(
+  '/billers/:id',
+  paymentController.getBillerById as unknown as RequestHandler
+);
+
+// Protected routes - require authentication
 router.use(protect as unknown as RequestHandler);
 
 // Payment routes

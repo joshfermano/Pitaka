@@ -1,11 +1,22 @@
 import express from 'express';
-import { loanController } from '../controllers';
+import * as loanController from '../controllers/loanController';
 import { protect } from '../middlewares/authMiddleware';
 import { RequestHandler } from 'express';
 
 const router = express.Router();
 
-// All routes are protected
+// Public loan product routes (no auth required)
+router.get(
+  '/products',
+  loanController.getLoanProducts as unknown as RequestHandler
+);
+
+router.get(
+  '/products/:id',
+  loanController.getLoanProductById as unknown as RequestHandler
+);
+
+// Protected routes - require authentication
 router.use(protect as unknown as RequestHandler);
 
 // Loan routes
@@ -17,9 +28,10 @@ router
 router.route('/:id').get(loanController.getLoan as unknown as RequestHandler);
 
 router.post(
-  '/:id/payments',
+  '/:id/payment',
   loanController.makeLoanPayment as unknown as RequestHandler
 );
+
 router.get(
   '/:id/payments',
   loanController.getLoanPayments as unknown as RequestHandler

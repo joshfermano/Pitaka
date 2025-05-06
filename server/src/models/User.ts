@@ -18,6 +18,12 @@ export interface IUser extends Document {
     zipCode: string;
     country: string;
   };
+  settings?: {
+    notificationsEnabled: boolean;
+    darkModeEnabled: boolean;
+    biometricsEnabled: boolean;
+    language: string;
+  };
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -94,6 +100,24 @@ const UserSchema: Schema = new Schema(
         type: String,
         required: [true, 'Country is required'],
         trim: true,
+      },
+    },
+    settings: {
+      notificationsEnabled: {
+        type: Boolean,
+        default: true,
+      },
+      darkModeEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      biometricsEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      language: {
+        type: String,
+        default: 'en',
       },
     },
     isActive: {

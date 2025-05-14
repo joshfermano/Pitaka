@@ -267,6 +267,14 @@ export const getProfile = async (req: Request, res: Response) => {
     console.log('Get profile request for user:', req.user?.id);
     const userId = req.user?.id;
 
+    // Set cache control headers to prevent caching
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, private'
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const user = await User.findById(userId).select('-password');
     if (!user) {
       console.log('Get profile failed: User not found:', userId);

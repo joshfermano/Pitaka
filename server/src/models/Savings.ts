@@ -66,8 +66,25 @@ const AutoTransferSchema: Schema = new Schema({
   },
   frequency: {
     type: String,
-    enum: ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'NONE'],
+    enum: {
+      values: [
+        'WEEKLY',
+        'MONTHLY',
+        'QUARTERLY',
+        'NONE',
+        'weekly',
+        'monthly',
+        'quarterly',
+        'none',
+      ],
+      message: '{VALUE} is not a valid frequency',
+    },
     default: 'NONE',
+    // Custom setter to normalize values
+    set: (value: string) => {
+      if (!value) return 'NONE';
+      return value.toUpperCase();
+    },
   },
   nextDate: {
     type: Date,
@@ -137,11 +154,27 @@ const SavingsAccountSchema: Schema = new Schema(
   }
 );
 
-// Pre-save middleware to calculate progress
+// Pre-save middleware to calculate progress and normalize data
 SavingsAccountSchema.pre<ISavingsAccount>('save', function (next) {
+  // Calculate progress
   if (this.targetAmount > 0) {
     this.progress = Math.min(this.currentAmount / this.targetAmount, 1);
   }
+
+  // Normalize autoTransfer frequency to valid enum values
+  if (this.autoTransfer && this.autoTransfer.frequency) {
+    const frequency = this.autoTransfer.frequency.toString().toUpperCase();
+
+    // Validate against enum values
+    if (!['WEEKLY', 'MONTHLY', 'QUARTERLY', 'NONE'].includes(frequency)) {
+      // Default to NONE for invalid values
+      this.autoTransfer.frequency = 'NONE' as FrequencyType;
+    } else {
+      // Set normalized value
+      this.autoTransfer.frequency = frequency as FrequencyType;
+    }
+  }
+
   next();
 });
 

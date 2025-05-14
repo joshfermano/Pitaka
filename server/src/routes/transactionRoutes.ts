@@ -13,6 +13,13 @@ router
   .route('/')
   .get(transactionController.getTransactions as unknown as RequestHandler);
 
+// Recent transactions
+router
+  .route('/recent')
+  .get(
+    transactionController.getRecentTransactions as unknown as RequestHandler
+  );
+
 router
   .route('/:id')
   .get(transactionController.getTransaction as unknown as RequestHandler);

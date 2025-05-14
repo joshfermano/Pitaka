@@ -17,7 +17,16 @@ router
 // Get specific savings by ID
 router
   .route('/:id')
-  .get(savingsController.getSavingsById as unknown as RequestHandler);
+  .get(savingsController.getSavingsById as unknown as RequestHandler)
+  .patch(savingsController.updateSavingsAccount as unknown as RequestHandler)
+  .delete(savingsController.deleteSavingsAccount as unknown as RequestHandler);
+
+// Transactions for specific savings
+router
+  .route('/:id/transactions')
+  .get(
+    savingsController.getTransactionsForSavings as unknown as RequestHandler
+  );
 
 // Deposit and withdraw from savings
 router

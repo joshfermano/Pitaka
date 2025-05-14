@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction';
 import { Transfer } from '../models/Transfer';
 import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
+import { TransactionType, TransactionStatus } from '../models/Transaction';
 
 /**
  * Make a deposit to an account
@@ -16,7 +17,17 @@ export const deposit = async (req: Request, res: Response) => {
 
   try {
     const userId = req.user?.id;
-    const { accountId, amount, description } = req.body;
+    const { accountId, amount, description, method, referenceNumber } =
+      req.body;
+
+    console.log('Deposit request received:', {
+      accountId,
+      amount,
+      description,
+      method,
+      referenceNumber,
+      userId,
+    });
 
     if (!mongoose.Types.ObjectId.isValid(accountId)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -48,15 +59,32 @@ export const deposit = async (req: Request, res: Response) => {
     account.balance += amount;
     await account.save({ session });
 
+    // Prepare transaction description with deposit method and reference if provided
+    let finalDescription = description || 'Deposit';
+    if (method && !finalDescription.includes(method)) {
+      finalDescription = `${method} ${finalDescription}`;
+    }
+    if (referenceNumber && !finalDescription.includes(referenceNumber)) {
+      finalDescription = `${finalDescription} (Ref: ${referenceNumber})`;
+    }
+
+    // Generate a transaction ID
+    const transactionId = `TXN${Date.now()}${Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0')}`;
+
     // Create transaction record
     const transaction = await Transaction.create(
       [
         {
           userId,
           accountId,
-          type: 'deposit',
+          transactionId,
+          type: TransactionType.DEPOSIT, // Use the enum value
           amount,
-          description: description || 'Deposit',
+          description: finalDescription,
+          status: TransactionStatus.COMPLETED, // Mark as completed
+          date: new Date(),
         },
       ],
       { session }
@@ -64,6 +92,11 @@ export const deposit = async (req: Request, res: Response) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    console.log('Deposit successful:', {
+      transactionId: transaction[0].transactionId,
+      newBalance: account.balance,
+    });
 
     res.status(StatusCodes.CREATED).json({
       success: true,
@@ -77,6 +110,7 @@ export const deposit = async (req: Request, res: Response) => {
     await session.abortTransaction();
     session.endSession();
 
+    console.error('Deposit error:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Failed to process deposit',
@@ -96,7 +130,15 @@ export const withdraw = async (req: Request, res: Response) => {
 
   try {
     const userId = req.user?.id;
-    const { accountId, amount, description } = req.body;
+    const { accountId, amount, description, method } = req.body;
+
+    console.log('Withdrawal request received:', {
+      userId,
+      accountId,
+      amount,
+      description,
+      method,
+    });
 
     if (!mongoose.Types.ObjectId.isValid(accountId)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -136,15 +178,29 @@ export const withdraw = async (req: Request, res: Response) => {
     account.balance -= amount;
     await account.save({ session });
 
+    // Prepare withdrawal description with method if provided
+    let finalDescription = description || 'Withdrawal';
+    if (method && !finalDescription.includes(method)) {
+      finalDescription = `${method} ${finalDescription}`;
+    }
+
+    // Generate a transaction ID
+    const transactionId = `TXN${Date.now()}${Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0')}`;
+
     // Create transaction record
     const transaction = await Transaction.create(
       [
         {
           userId,
           accountId,
-          type: 'withdrawal',
+          transactionId,
+          type: TransactionType.WITHDRAWAL,
           amount,
-          description: description || 'Withdrawal',
+          description: finalDescription,
+          status: TransactionStatus.COMPLETED,
+          date: new Date(),
         },
       ],
       { session }
@@ -152,6 +208,11 @@ export const withdraw = async (req: Request, res: Response) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    console.log('Withdrawal successful:', {
+      transactionId: transaction[0].transactionId,
+      newBalance: account.balance,
+    });
 
     res.status(StatusCodes.CREATED).json({
       success: true,
@@ -165,6 +226,7 @@ export const withdraw = async (req: Request, res: Response) => {
     await session.abortTransaction();
     session.endSession();
 
+    console.error('Withdrawal error:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Failed to process withdrawal',
@@ -185,6 +247,14 @@ export const transfer = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { fromAccountId, toAccountId, amount, description } = req.body;
+
+    console.log('Transfer request received:', {
+      userId,
+      fromAccountId,
+      toAccountId,
+      amount,
+      description,
+    });
 
     if (
       !mongoose.Types.ObjectId.isValid(fromAccountId) ||
@@ -246,6 +316,21 @@ export const transfer = async (req: Request, res: Response) => {
     await sourceAccount.save({ session });
     await destAccount.save({ session });
 
+    // Generate transaction ID for the transfer
+    const transferId = `TXN${Date.now()}${Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0')}`;
+
+    // Prepare descriptions
+    const sourceDescription =
+      description ||
+      `Transfer to account ending in ${destAccount.accountNumber.slice(-4)}`;
+    const destDescription =
+      description ||
+      `Received from account ending in ${sourceAccount.accountNumber.slice(
+        -4
+      )}`;
+
     // Create transfer record
     const transfer = await Transfer.create(
       [
@@ -254,44 +339,44 @@ export const transfer = async (req: Request, res: Response) => {
           fromAccountId,
           toAccountId,
           amount,
-          description: description || 'Transfer',
+          description: sourceDescription,
+          reference: transferId,
+          status: 'COMPLETED',
         },
       ],
       { session }
     );
 
     // Create transaction records for both accounts
-    await Transaction.create(
+    const outgoingTransaction = await Transaction.create(
       [
         {
           userId,
           accountId: fromAccountId,
-          type: 'transfer_out',
+          transactionId: `OUT${transferId}`,
+          type: TransactionType.TRANSFER,
           amount,
-          description:
-            description ||
-            `Transfer to account ending in ${destAccount.accountNumber.slice(
-              -4
-            )}`,
+          description: sourceDescription,
           transferId: transfer[0]._id,
+          status: TransactionStatus.COMPLETED,
+          date: new Date(),
         },
       ],
       { session }
     );
 
-    await Transaction.create(
+    const incomingTransaction = await Transaction.create(
       [
         {
           userId: destAccount.userId,
           accountId: toAccountId,
-          type: 'transfer_in',
+          transactionId: `IN${transferId}`,
+          type: TransactionType.TRANSFER_RECEIVED,
           amount,
-          description:
-            description ||
-            `Transfer from account ending in ${sourceAccount.accountNumber.slice(
-              -4
-            )}`,
+          description: destDescription,
           transferId: transfer[0]._id,
+          status: TransactionStatus.COMPLETED,
+          date: new Date(),
         },
       ],
       { session }
@@ -300,18 +385,28 @@ export const transfer = async (req: Request, res: Response) => {
     await session.commitTransaction();
     session.endSession();
 
+    console.log('Transfer successful:', {
+      transferId: transfer[0].reference,
+      sourceBalance: sourceAccount.balance,
+    });
+
     res.status(StatusCodes.CREATED).json({
       success: true,
       message: 'Transfer successful',
       data: {
         transfer: transfer[0],
         sourceAccountBalance: sourceAccount.balance,
+        transactions: {
+          outgoing: outgoingTransaction[0],
+          incoming: incomingTransaction[0],
+        },
       },
     });
   } catch (error: any) {
     await session.abortTransaction();
     session.endSession();
 
+    console.error('Transfer error:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Failed to process transfer',
@@ -400,6 +495,47 @@ export const getTransaction = async (req: Request, res: Response) => {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Failed to fetch transaction',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get recent transactions for a user
+ * @route GET /api/transactions/recent
+ * @access Private
+ */
+export const getRecentTransactions = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { limit = 5 } = req.query;
+
+    // Set cache control headers to prevent caching
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, private'
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    const limitNum = parseInt(limit as string, 10);
+
+    // Find the most recent transactions for this user
+    const transactions = await Transaction.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .populate('accountId', 'accountNumber name');
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      count: transactions.length,
+      data: { transactions },
+    });
+  } catch (error: any) {
+    console.error('Error fetching recent transactions:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch recent transactions',
       error: error.message,
     });
   }

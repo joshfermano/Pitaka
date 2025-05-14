@@ -13,6 +13,14 @@ export const getAccounts = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
+    // Set cache control headers to prevent caching
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, private'
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const accounts = await Account.find({ userId });
 
     res.status(StatusCodes.OK).json({
@@ -38,6 +46,14 @@ export const getAccount = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
+
+    // Set cache control headers to prevent caching
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, private'
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -121,6 +137,14 @@ export const getAccountBalance = async (req: Request, res: Response) => {
     const { id } = req.params;
     const userId = req.user?.id;
 
+    // Set cache control headers to prevent caching
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, private'
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
@@ -168,6 +192,14 @@ export const getAccountTransactions = async (req: Request, res: Response) => {
     const { id } = req.params;
     const userId = req.user?.id;
     const { limit = 10, page = 1 } = req.query;
+
+    // Set cache control headers to prevent caching
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, private'
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);

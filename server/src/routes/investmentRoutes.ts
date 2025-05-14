@@ -16,6 +16,12 @@ router.get(
   investmentController.getCompanyById as unknown as RequestHandler
 );
 
+// Add company price history endpoint
+router.get(
+  '/companies/:id/history',
+  investmentController.getCompanyPriceHistory as unknown as RequestHandler
+);
+
 // Protected routes - require authentication
 router.use(protect as unknown as RequestHandler);
 

@@ -40,9 +40,10 @@ const allowedOrigins = [
   'exp://localhost:19000',
   'exp://127.0.0.1:19000',
   // Add your specific local network IP - crucial for Expo Go on physical devices
-  'http://192.168.1.2:19000',
-  'exp://192.168.1.2:19000',
-  'http://192.168.1.2:6000',
+  'http://192.168.1.12:19000',
+  'exp://192.168.1.12:19000',
+  'http://192.168.1.12:6000',
+  'http://192.168.1.12:8081',
   // Android emulator special IP
   'http://10.0.2.2:19000',
   'exp://10.0.2.2:19000',

@@ -185,10 +185,28 @@ InvestmentSchema.methods.updateValues = async function (this: IInvestment) {
   try {
     const company = await mongoose.model('Company').findById(this.companyId);
     if (company) {
-      this.currentValue = this.shares * company.currentPrice;
-      this.profit = this.currentValue - this.amount;
-      this.profitPercent = (this.profit / this.amount) * 100;
-      await this.save();
+      // Calculate current value based on company's current price
+      this.currentValue = parseFloat(
+        (this.shares * company.currentPrice).toFixed(2)
+      );
+      this.profit = parseFloat((this.currentValue - this.amount).toFixed(2));
+      this.profitPercent = parseFloat(
+        ((this.profit / this.amount) * 100).toFixed(2)
+      );
+
+      console.log(`[Investment] Updated values for investment ${this._id}:`, {
+        shares: this.shares,
+        companyPrice: company.currentPrice,
+        currentValue: this.currentValue,
+        profit: this.profit,
+        profitPercent: this.profitPercent,
+      });
+
+      return await this.save();
+    } else {
+      console.error(
+        `[Investment] Company not found for investment ${this._id}`
+      );
     }
   } catch (error) {
     console.error('Error updating investment values:', error);

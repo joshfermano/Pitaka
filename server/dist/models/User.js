@@ -110,6 +110,24 @@ const UserSchema = new mongoose_1.Schema({
             trim: true,
         },
     },
+    settings: {
+        notificationsEnabled: {
+            type: Boolean,
+            default: true,
+        },
+        darkModeEnabled: {
+            type: Boolean,
+            default: false,
+        },
+        biometricsEnabled: {
+            type: Boolean,
+            default: false,
+        },
+        language: {
+            type: String,
+            default: 'en',
+        },
+    },
     isActive: {
         type: Boolean,
         default: true,
@@ -135,14 +153,23 @@ UserSchema.methods.comparePassword = async function (candidatePassword) {
 };
 // Method to generate JWT
 UserSchema.methods.generateAuthToken = function () {
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-        throw new Error('JWT_SECRET is not defined in environment variables');
+    try {
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            throw new Error('JWT_SECRET is not defined in environment variables');
+        }
+        const payload = {
+            id: this._id.toString(),
+            email: this.email,
+        };
+        // @ts-ignore
+        return jsonwebtoken_1.default.sign(payload, jwtSecret, {
+            expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+        });
     }
-    const payload = {
-        id: this._id.toString(),
-        username: this.email,
-    };
-    return jsonwebtoken_1.default.sign(payload, jwtSecret, { expiresIn: '24h' });
+    catch (error) {
+        console.error('Error generating auth token:', error);
+        throw error;
+    }
 };
 exports.default = mongoose_1.default.model('User', UserSchema);

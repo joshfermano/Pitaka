@@ -14,7 +14,9 @@ router
     .route('/')
     .get(controllers_1.accountController.getAccounts)
     .post(controllers_1.accountController.createAccount);
-router.route('/:id').get(controllers_1.accountController.getAccount);
+router
+    .route('/:id')
+    .get(controllers_1.accountController.getAccount);
 router.get('/:id/balance', controllers_1.accountController.getAccountBalance);
 router.get('/:id/transactions', controllers_1.accountController.getAccountTransactions);
 exports.default = router;

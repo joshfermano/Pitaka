@@ -19,6 +19,7 @@ export interface ITransferRecipient extends Document {
 }
 
 export interface ITransfer extends Document {
+  userId: mongoose.Types.ObjectId; // User ID for the transfer record
   senderId: mongoose.Types.ObjectId; // User ID who initiated the transfer
   senderAccountId: mongoose.Types.ObjectId; // Account ID from which money is transferred
   recipientId: mongoose.Types.ObjectId; // Recipient entity (user or external recipient)
@@ -81,6 +82,11 @@ const TransferRecipientSchema: Schema = new Schema(
 
 const TransferSchema = new Schema<ITransfer, TransferModel>(
   {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'User ID is required'],
+    },
     senderId: {
       type: Schema.Types.ObjectId,
       ref: 'User',

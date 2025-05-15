@@ -31,17 +31,17 @@ export const seedDatabase = async (): Promise<void> => {
     // Create companies for investments
     if (companyCount === 0) {
       const companies = [
-      {
+        {
           _id: new mongoose.Types.ObjectId(),
-        name: 'PLDT Inc.',
-        symbol: 'TEL',
-        currentPrice: 1250.5,
-        previousClose: 1230.0,
-        change: 20.5,
-        changePercent: 1.67,
-        sector: 'Telecommunications',
-      },
-      {
+          name: 'PLDT Inc.',
+          symbol: 'TEL',
+          currentPrice: 1250.5,
+          previousClose: 1230.0,
+          change: 20.5,
+          changePercent: 1.67,
+          sector: 'Telecommunications',
+        },
+        {
           _id: new mongoose.Types.ObjectId(),
           name: 'Ayala Corporation',
           symbol: 'AC',
@@ -53,15 +53,15 @@ export const seedDatabase = async (): Promise<void> => {
         },
         {
           _id: new mongoose.Types.ObjectId(),
-        name: 'SM Investments',
-        symbol: 'SM',
-        currentPrice: 925.0,
-        previousClose: 915.0,
-        change: 10.0,
-        changePercent: 1.09,
-        sector: 'Holding Firms',
-      },
-      {
+          name: 'SM Investments',
+          symbol: 'SM',
+          currentPrice: 925.0,
+          previousClose: 915.0,
+          change: 10.0,
+          changePercent: 1.09,
+          sector: 'Holding Firms',
+        },
+        {
           _id: new mongoose.Types.ObjectId(),
           name: 'BDO Unibank',
           symbol: 'BDO',
@@ -73,14 +73,14 @@ export const seedDatabase = async (): Promise<void> => {
         },
         {
           _id: new mongoose.Types.ObjectId(),
-        name: 'Jollibee Foods',
-        symbol: 'JFC',
-        currentPrice: 186.5,
-        previousClose: 184.8,
-        change: 1.7,
-        changePercent: 0.92,
-        sector: 'Consumer Services',
-      },
+          name: 'Jollibee Foods',
+          symbol: 'JFC',
+          currentPrice: 186.5,
+          previousClose: 184.8,
+          change: 1.7,
+          changePercent: 0.92,
+          sector: 'Consumer Services',
+        },
       ];
 
       await models.Company.create(companies);
@@ -92,32 +92,32 @@ export const seedDatabase = async (): Promise<void> => {
       const loanProducts = [
         {
           _id: new mongoose.Types.ObjectId(),
-        title: 'Personal Loan',
-        interest: '10.5% p.a.',
-        minAmount: 10000,
-        maxAmount: 500000,
-        term: '6-36 months',
-        icon: 'account',
-        color: '#4F46E5',
-        description:
-          'Get the funds you need for personal expenses, debt consolidation, home improvements, or any other financial needs with our flexible personal loan options.',
-        requirements: [
-          'Must be 21-65 years old',
-          'Minimum monthly income of ₱15,000',
-          'Must be a Filipino citizen or resident foreigner',
-          'At least 6 months with current employer',
-        ],
-        features: [
-          {
-            title: 'Flexible Terms',
-            description:
-              'Choose repayment terms that fit your budget, from 6 to 36 months.',
-          },
-          {
-            title: 'Competitive Rates',
-            description:
-              'Our competitive interest rates start at 10.5% per annum.',
-          },
+          title: 'Personal Loan',
+          interest: '10.5% p.a.',
+          minAmount: 10000,
+          maxAmount: 500000,
+          term: '6-36 months',
+          icon: 'account',
+          color: '#4F46E5',
+          description:
+            'Get the funds you need for personal expenses, debt consolidation, home improvements, or any other financial needs with our flexible personal loan options.',
+          requirements: [
+            'Must be 21-65 years old',
+            'Minimum monthly income of ₱15,000',
+            'Must be a Filipino citizen or resident foreigner',
+            'At least 6 months with current employer',
+          ],
+          features: [
+            {
+              title: 'Flexible Terms',
+              description:
+                'Choose repayment terms that fit your budget, from 6 to 36 months.',
+            },
+            {
+              title: 'Competitive Rates',
+              description:
+                'Our competitive interest rates start at 10.5% per annum.',
+            },
             {
               title: 'Quick Approval',
               description:
@@ -127,32 +127,32 @@ export const seedDatabase = async (): Promise<void> => {
               title: 'No Collateral Required',
               description:
                 "Unsecured loan option that doesn't require any collateral.",
-          },
-        ],
-        eligibility: [
-          'Filipino citizen or resident foreigner',
-          'Age 21-65 years old',
-          'Regular employment with at least 6 months tenure',
-          'Minimum monthly income of ₱15,000',
-        ],
-        documents: [
-          'Valid government-issued ID',
-          'Proof of income (latest 3 months pay slips)',
-          'Certificate of Employment',
-          'Latest 3 months bank statements',
+            },
+          ],
+          eligibility: [
+            'Filipino citizen or resident foreigner',
+            'Age 21-65 years old',
+            'Regular employment with at least 6 months tenure',
+            'Minimum monthly income of ₱15,000',
+          ],
+          documents: [
+            'Valid government-issued ID',
+            'Proof of income (latest 3 months pay slips)',
+            'Certificate of Employment',
+            'Latest 3 months bank statements',
             'Proof of billing (utility bill under your name)',
-        ],
-        faq: [
-          {
-            question: 'How much can I borrow?',
-            answer:
-              'You can borrow between ₱10,000 to ₱500,000 depending on your income and credit assessment.',
-          },
-          {
-            question: 'How long does the approval process take?',
-            answer:
-              'Upon complete submission of requirements, the approval process typically takes 24-48 hours.',
-          },
+          ],
+          faq: [
+            {
+              question: 'How much can I borrow?',
+              answer:
+                'You can borrow between ₱10,000 to ₱500,000 depending on your income and credit assessment.',
+            },
+            {
+              question: 'How long does the approval process take?',
+              answer:
+                'Upon complete submission of requirements, the approval process typically takes 24-48 hours.',
+            },
             {
               question: 'Are there any pre-payment penalties?',
               answer:
@@ -225,68 +225,67 @@ export const seedDatabase = async (): Promise<void> => {
                 'Can I apply for a home loan for a property under construction?',
               answer:
                 'Yes, we offer construction loans with progressive release of funds based on construction milestones.',
-          },
-        ],
-      },
-      {
+            },
+          ],
+        },
+        {
           _id: new mongoose.Types.ObjectId(),
-        title: 'Auto Loan',
-        interest: '7.25% p.a.',
-        minAmount: 100000,
-        maxAmount: 1000000,
-        term: '12-60 months',
-        icon: 'car',
-        color: '#059669',
-        description:
-          'Finance your dream car with our competitive auto loan options. Get on the road faster with quick approval and flexible terms.',
-        requirements: [
-          'Must be 21-65 years old',
-          'Minimum monthly income of ₱25,000',
-          'Must be a Filipino citizen or resident foreigner',
-          'At least 1 year with current employer',
-        ],
-        features: [
-          {
-            title: 'Low Interest Rates',
-            description:
-              'Competitive interest rates starting from 7.25% per annum.',
-          },
-          {
-            title: 'Flexible Terms',
-            description: 'Choose repayment terms from 12 to 60 months.',
-          },
-        ],
-        eligibility: [
-          'Filipino citizen or resident foreigner',
-          'Age 21-65 years old',
-          'Regular employment with at least 1 year tenure',
-          'Minimum monthly income of ₱25,000',
-        ],
-        documents: [
-          'Valid government-issued ID',
-          'Proof of income (latest 3 months pay slips)',
-          'Certificate of Employment',
-          'Vehicle details and invoice',
-        ],
-        faq: [
-          {
-            question: 'What vehicles can I finance?',
-            answer:
-              'You can finance new or used vehicles up to 7 years old from authorized dealers.',
-          },
-          {
-            question: 'What is the minimum down payment?',
-            answer: 'The minimum down payment is 20% of the vehicle price.',
-          },
-        ],
-      },
+          title: 'Auto Loan',
+          interest: '7.25% p.a.',
+          minAmount: 100000,
+          maxAmount: 1000000,
+          term: '12-60 months',
+          icon: 'car',
+          color: '#059669',
+          description:
+            'Finance your dream car with our competitive auto loan options. Get on the road faster with quick approval and flexible terms.',
+          requirements: [
+            'Must be 21-65 years old',
+            'Minimum monthly income of ₱25,000',
+            'Must be a Filipino citizen or resident foreigner',
+            'At least 1 year with current employer',
+          ],
+          features: [
+            {
+              title: 'Low Interest Rates',
+              description:
+                'Competitive interest rates starting from 7.25% per annum.',
+            },
+            {
+              title: 'Flexible Terms',
+              description: 'Choose repayment terms from 12 to 60 months.',
+            },
+          ],
+          eligibility: [
+            'Filipino citizen or resident foreigner',
+            'Age 21-65 years old',
+            'Regular employment with at least 1 year tenure',
+            'Minimum monthly income of ₱25,000',
+          ],
+          documents: [
+            'Valid government-issued ID',
+            'Proof of income (latest 3 months pay slips)',
+            'Certificate of Employment',
+            'Vehicle details and invoice',
+          ],
+          faq: [
+            {
+              question: 'What vehicles can I finance?',
+              answer:
+                'You can finance new or used vehicles up to 7 years old from authorized dealers.',
+            },
+            {
+              question: 'What is the minimum down payment?',
+              answer: 'The minimum down payment is 20% of the vehicle price.',
+            },
+          ],
+        },
       ];
 
       await models.LoanProduct.create(loanProducts);
       console.log('✅ Loan Products seeded successfully');
     }
 
-    // Create banks
     if (bankCount === 0) {
       const banks = [
         {
@@ -418,32 +417,32 @@ export const seedDatabase = async (): Promise<void> => {
     // Create billers
     if (billerCount === 0) {
       const billers = [
-      {
+        {
           _id: new mongoose.Types.ObjectId(),
-        name: 'Meralco',
-        category: models.BillerCategory.ELECTRICITY,
-        logo: 'meralco',
-        accountNumberLabel: 'Customer Account Number',
-        accountNumberMask: '####-####-####',
-        accountNumberLength: 12,
-        minimumAmount: 50,
-        maximumAmount: 50000,
-        convenienceFee: 7.5,
-        popularIndex: 1,
-      },
-      {
+          name: 'Meralco',
+          category: models.BillerCategory.ELECTRICITY,
+          logo: 'meralco',
+          accountNumberLabel: 'Customer Account Number',
+          accountNumberMask: '####-####-####',
+          accountNumberLength: 12,
+          minimumAmount: 50,
+          maximumAmount: 50000,
+          convenienceFee: 7.5,
+          popularIndex: 1,
+        },
+        {
           _id: new mongoose.Types.ObjectId(),
-        name: 'Maynilad',
-        category: models.BillerCategory.WATER,
-        logo: 'maynilad',
-        accountNumberLabel: 'Contract Account Number',
-        accountNumberMask: '##########',
-        accountNumberLength: 10,
-        minimumAmount: 50,
-        maximumAmount: 30000,
-        popularIndex: 2,
-      },
-      {
+          name: 'Maynilad',
+          category: models.BillerCategory.WATER,
+          logo: 'maynilad',
+          accountNumberLabel: 'Contract Account Number',
+          accountNumberMask: '##########',
+          accountNumberLength: 10,
+          minimumAmount: 50,
+          maximumAmount: 30000,
+          popularIndex: 2,
+        },
+        {
           _id: new mongoose.Types.ObjectId(),
           name: 'Manila Water',
           category: models.BillerCategory.WATER,
@@ -457,14 +456,14 @@ export const seedDatabase = async (): Promise<void> => {
         },
         {
           _id: new mongoose.Types.ObjectId(),
-        name: 'Netflix',
-        category: models.BillerCategory.ENTERTAINMENT,
-        logo: 'netflix',
-        accountNumberLabel: 'Email Address',
-        minimumAmount: 149,
-        maximumAmount: 549,
-        popularIndex: 4,
-      },
+          name: 'Netflix',
+          category: models.BillerCategory.ENTERTAINMENT,
+          logo: 'netflix',
+          accountNumberLabel: 'Email Address',
+          minimumAmount: 149,
+          maximumAmount: 549,
+          popularIndex: 4,
+        },
         {
           _id: new mongoose.Types.ObjectId(),
           name: 'Spotify',

@@ -11,6 +11,7 @@ const router = express_1.default.Router();
 router.post('/register', controllers_1.authController.register);
 router.post('/login', controllers_1.authController.login);
 router.post('/logout', controllers_1.authController.logout);
+router.post('/refresh-token', controllers_1.authController.refreshToken);
 // Protected routes
 router.use(authMiddleware_1.protect);
 // Get user profile

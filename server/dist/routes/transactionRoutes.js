@@ -10,7 +10,19 @@ const router = express_1.default.Router();
 // All routes are protected
 router.use(authMiddleware_1.protect);
 // Transaction routes
-router.route('/').get(controllers_1.transactionController.getTransactions);
+router
+    .route('/')
+    .get(controllers_1.transactionController.getTransactions);
+// Recent transactions
+router
+    .route('/recent')
+    .get(controllers_1.transactionController.getRecentTransactions);
+// IMPORTANT: The specific route must come BEFORE the generic ID route
+// Get transaction by transactionId field specifically
+router
+    .route('/by-transaction-id/:transactionId')
+    .get(controllers_1.transactionController.getTransaction);
+// Get transaction by MongoDB _id (must come AFTER more specific routes)
 router
     .route('/:id')
     .get(controllers_1.transactionController.getTransaction);

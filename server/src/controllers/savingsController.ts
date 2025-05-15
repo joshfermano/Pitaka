@@ -207,6 +207,8 @@ export const createSavings = async (req: Request, res: Response) => {
               amount: initialDeposit,
               description: `Initial deposit for savings: ${name}`,
               savingsId: savings[0]._id,
+              status: TransactionStatus.COMPLETED,
+              date: new Date(),
             },
           ],
           { session }
@@ -429,6 +431,8 @@ export const depositToSavings = async (req: Request, res: Response) => {
           amount,
           description: `Deposit to savings: ${savings.name}`,
           savingsId: savings._id,
+          status: TransactionStatus.COMPLETED,
+          date: new Date(),
         },
       ],
       { session }
@@ -550,6 +554,8 @@ export const withdrawFromSavings = async (req: Request, res: Response) => {
           amount,
           description: `Withdrawal from savings: ${savings.name}`,
           savingsId: id,
+          status: TransactionStatus.COMPLETED,
+          date: new Date(),
         },
       ],
       { session }
@@ -717,6 +723,8 @@ export const deleteSavingsAccount = async (req: Request, res: Response) => {
               amount: savings.currentAmount,
               description: `Withdrawal due to savings account deletion: ${savings.name}`,
               savingsId: id,
+              status: TransactionStatus.COMPLETED,
+              date: new Date(),
             },
           ],
           { session }

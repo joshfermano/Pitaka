@@ -11,14 +11,17 @@ const http_status_codes_1 = require("http-status-codes");
  */
 const protect = async (req, res, next) => {
     try {
-        // Check for token in cookies first (for web clients)
-        let token = req.cookies?.token;
-        // If no token in cookies, check authorization header (for mobile clients)
-        if (!token) {
-            const authHeader = req.headers.authorization;
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                token = authHeader.split(' ')[1];
-            }
+        let token;
+        const authHeader = req.headers.authorization;
+        // First try to get token from Authorization header (Bearer token)
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.split(' ')[1];
+            console.log('Auth token found in Authorization header');
+        }
+        // If no token in header, try cookies (for web clients)
+        if (!token && req.cookies?.token) {
+            token = req.cookies.token;
+            console.log('Auth token found in cookies');
         }
         if (!token) {
             console.log('Authentication failed: No token provided');
@@ -38,13 +41,16 @@ const protect = async (req, res, next) => {
         }
         // Verify token
         try {
+            // @ts-ignore
             const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
-            // Set basic user info in request
+            // Set user info in request - Note: We set both id and _id to ensure compatibility
             req.user = {
+                _id: decoded.id,
                 id: decoded.id,
-                email: decoded.username, // Using username from token
-                role: 'user', // Default role
+                email: decoded.email,
+                role: decoded.role || 'user', // Default role if not in token
             };
+            console.log(`Authenticated user: ${req.user.email} (${req.user.id})`);
             // Proceed to the protected route
             next();
         }
@@ -77,11 +83,6 @@ exports.protect = protect;
  */
 const errorHandler = (err, req, res, next) => {
     console.error('Global error handler:', err);
-    // Set CORS headers for error responses too
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
     // Custom error response
     res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
         success: false,

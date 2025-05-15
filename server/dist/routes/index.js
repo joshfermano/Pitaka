@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.investmentRoutes = exports.savingsRoutes = exports.loanRoutes = exports.paymentRoutes = exports.transactionRoutes = exports.accountRoutes = exports.authRoutes = void 0;
+exports.userRoutes = exports.transferRoutes = exports.cardRoutes = exports.investmentRoutes = exports.savingsRoutes = exports.loanRoutes = exports.paymentRoutes = exports.transactionRoutes = exports.accountRoutes = exports.authRoutes = void 0;
 const authRoutes_1 = __importDefault(require("./authRoutes"));
 exports.authRoutes = authRoutes_1.default;
 const accountRoutes_1 = __importDefault(require("./accountRoutes"));
@@ -18,3 +18,9 @@ const savingsRoutes_1 = __importDefault(require("./savingsRoutes"));
 exports.savingsRoutes = savingsRoutes_1.default;
 const investmentRoutes_1 = __importDefault(require("./investmentRoutes"));
 exports.investmentRoutes = investmentRoutes_1.default;
+const cardRoutes_1 = __importDefault(require("./cardRoutes"));
+exports.cardRoutes = cardRoutes_1.default;
+const transferRoutes_1 = __importDefault(require("./transferRoutes"));
+exports.transferRoutes = transferRoutes_1.default;
+const userRoutes_1 = __importDefault(require("./userRoutes"));
+exports.userRoutes = userRoutes_1.default;

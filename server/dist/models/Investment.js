@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Investment = exports.Company = void 0;
+exports.PriceAlert = exports.Investment = exports.Company = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const CompanySchema = new mongoose_1.Schema({
     name: {
@@ -131,6 +131,37 @@ const InvestmentSchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
+const PriceAlertSchema = new mongoose_1.Schema({
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+    },
+    companyId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Company',
+        required: true,
+    },
+    type: {
+        type: String,
+        enum: ['PRICE_ABOVE', 'PRICE_BELOW'],
+        required: true,
+    },
+    value: {
+        type: Number,
+        required: true,
+    },
+    active: {
+        type: Boolean,
+        default: true,
+    },
+    triggered: {
+        type: Boolean,
+        default: false,
+    },
+}, {
+    timestamps: true,
+});
 // Method to update investment values based on current company price
 InvestmentSchema.methods.updateValues = async function () {
     try {
@@ -148,3 +179,4 @@ InvestmentSchema.methods.updateValues = async function () {
 };
 exports.Company = mongoose_1.default.model('Company', CompanySchema);
 exports.Investment = mongoose_1.default.model('Investment', InvestmentSchema);
+exports.PriceAlert = mongoose_1.default.model('PriceAlert', PriceAlertSchema);

@@ -3,12 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getTransaction = exports.getTransactions = exports.transfer = exports.withdraw = exports.deposit = void 0;
+exports.getRecentTransactions = exports.getTransaction = exports.getTransactions = exports.transfer = exports.withdraw = exports.deposit = void 0;
 const Account_1 = __importDefault(require("../models/Account"));
 const Transaction_1 = __importDefault(require("../models/Transaction"));
 const Transfer_1 = require("../models/Transfer");
 const http_status_codes_1 = require("http-status-codes");
 const mongoose_1 = __importDefault(require("mongoose"));
+const Transaction_2 = require("../models/Transaction");
 /**
  * Make a deposit to an account
  * @route POST /api/transactions/deposit
@@ -19,7 +20,15 @@ const deposit = async (req, res) => {
     session.startTransaction();
     try {
         const userId = req.user?.id;
-        const { accountId, amount, description } = req.body;
+        const { accountId, amount, description, method, referenceNumber } = req.body;
+        console.log('Deposit request received:', {
+            accountId,
+            amount,
+            description,
+            method,
+            referenceNumber,
+            userId,
+        });
         if (!mongoose_1.default.Types.ObjectId.isValid(accountId)) {
             return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
                 success: false,
@@ -45,18 +54,37 @@ const deposit = async (req, res) => {
         // Update account balance
         account.balance += amount;
         await account.save({ session });
+        // Prepare transaction description with deposit method and reference if provided
+        let finalDescription = description || 'Deposit';
+        if (method && !finalDescription.includes(method)) {
+            finalDescription = `${method} ${finalDescription}`;
+        }
+        if (referenceNumber && !finalDescription.includes(referenceNumber)) {
+            finalDescription = `${finalDescription} (Ref: ${referenceNumber})`;
+        }
+        // Generate a transaction ID
+        const transactionId = `TXN${Date.now()}${Math.floor(Math.random() * 10000)
+            .toString()
+            .padStart(4, '0')}`;
         // Create transaction record
         const transaction = await Transaction_1.default.create([
             {
                 userId,
                 accountId,
-                type: 'deposit',
+                transactionId,
+                type: Transaction_2.TransactionType.DEPOSIT, // Use the enum value
                 amount,
-                description: description || 'Deposit',
+                description: finalDescription,
+                status: Transaction_2.TransactionStatus.COMPLETED, // Mark as completed
+                date: new Date(),
             },
         ], { session });
         await session.commitTransaction();
         session.endSession();
+        console.log('Deposit successful:', {
+            transactionId: transaction[0].transactionId,
+            newBalance: account.balance,
+        });
         res.status(http_status_codes_1.StatusCodes.CREATED).json({
             success: true,
             message: 'Deposit successful',
@@ -69,6 +97,7 @@ const deposit = async (req, res) => {
     catch (error) {
         await session.abortTransaction();
         session.endSession();
+        console.error('Deposit error:', error);
         res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: 'Failed to process deposit',
@@ -87,7 +116,14 @@ const withdraw = async (req, res) => {
     session.startTransaction();
     try {
         const userId = req.user?.id;
-        const { accountId, amount, description } = req.body;
+        const { accountId, amount, description, method } = req.body;
+        console.log('Withdrawal request received:', {
+            userId,
+            accountId,
+            amount,
+            description,
+            method,
+        });
         if (!mongoose_1.default.Types.ObjectId.isValid(accountId)) {
             return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
                 success: false,
@@ -120,18 +156,34 @@ const withdraw = async (req, res) => {
         // Update account balance
         account.balance -= amount;
         await account.save({ session });
+        // Prepare withdrawal description with method if provided
+        let finalDescription = description || 'Withdrawal';
+        if (method && !finalDescription.includes(method)) {
+            finalDescription = `${method} ${finalDescription}`;
+        }
+        // Generate a transaction ID
+        const transactionId = `TXN${Date.now()}${Math.floor(Math.random() * 10000)
+            .toString()
+            .padStart(4, '0')}`;
         // Create transaction record
         const transaction = await Transaction_1.default.create([
             {
                 userId,
                 accountId,
-                type: 'withdrawal',
+                transactionId,
+                type: Transaction_2.TransactionType.WITHDRAWAL,
                 amount,
-                description: description || 'Withdrawal',
+                description: finalDescription,
+                status: Transaction_2.TransactionStatus.COMPLETED,
+                date: new Date(),
             },
         ], { session });
         await session.commitTransaction();
         session.endSession();
+        console.log('Withdrawal successful:', {
+            transactionId: transaction[0].transactionId,
+            newBalance: account.balance,
+        });
         res.status(http_status_codes_1.StatusCodes.CREATED).json({
             success: true,
             message: 'Withdrawal successful',
@@ -144,6 +196,7 @@ const withdraw = async (req, res) => {
     catch (error) {
         await session.abortTransaction();
         session.endSession();
+        console.error('Withdrawal error:', error);
         res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: 'Failed to process withdrawal',
@@ -163,6 +216,13 @@ const transfer = async (req, res) => {
     try {
         const userId = req.user?.id;
         const { fromAccountId, toAccountId, amount, description } = req.body;
+        console.log('Transfer request received:', {
+            userId,
+            fromAccountId,
+            toAccountId,
+            amount,
+            description,
+        });
         if (!mongoose_1.default.Types.ObjectId.isValid(fromAccountId) ||
             !mongoose_1.default.Types.ObjectId.isValid(toAccountId)) {
             return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
@@ -212,6 +272,15 @@ const transfer = async (req, res) => {
         destAccount.balance += amount;
         await sourceAccount.save({ session });
         await destAccount.save({ session });
+        // Generate transaction ID for the transfer
+        const transferId = `TXN${Date.now()}${Math.floor(Math.random() * 10000)
+            .toString()
+            .padStart(4, '0')}`;
+        // Prepare descriptions
+        const sourceDescription = description ||
+            `Transfer to account ending in ${destAccount.accountNumber.slice(-4)}`;
+        const destDescription = description ||
+            `Received from account ending in ${sourceAccount.accountNumber.slice(-4)}`;
         // Create transfer record
         const transfer = await Transfer_1.Transfer.create([
             {
@@ -219,46 +288,61 @@ const transfer = async (req, res) => {
                 fromAccountId,
                 toAccountId,
                 amount,
-                description: description || 'Transfer',
+                description: sourceDescription,
+                reference: transferId,
+                status: 'COMPLETED',
             },
         ], { session });
         // Create transaction records for both accounts
-        await Transaction_1.default.create([
+        const outgoingTransaction = await Transaction_1.default.create([
             {
                 userId,
                 accountId: fromAccountId,
-                type: 'transfer_out',
+                transactionId: `OUT${transferId}`,
+                type: Transaction_2.TransactionType.TRANSFER,
                 amount,
-                description: description ||
-                    `Transfer to account ending in ${destAccount.accountNumber.slice(-4)}`,
+                description: sourceDescription,
                 transferId: transfer[0]._id,
+                status: Transaction_2.TransactionStatus.COMPLETED,
+                date: new Date(),
             },
         ], { session });
-        await Transaction_1.default.create([
+        const incomingTransaction = await Transaction_1.default.create([
             {
                 userId: destAccount.userId,
                 accountId: toAccountId,
-                type: 'transfer_in',
+                transactionId: `IN${transferId}`,
+                type: Transaction_2.TransactionType.TRANSFER_RECEIVED,
                 amount,
-                description: description ||
-                    `Transfer from account ending in ${sourceAccount.accountNumber.slice(-4)}`,
+                description: destDescription,
                 transferId: transfer[0]._id,
+                status: Transaction_2.TransactionStatus.COMPLETED,
+                date: new Date(),
             },
         ], { session });
         await session.commitTransaction();
         session.endSession();
+        console.log('Transfer successful:', {
+            transferId: transfer[0].reference,
+            sourceBalance: sourceAccount.balance,
+        });
         res.status(http_status_codes_1.StatusCodes.CREATED).json({
             success: true,
             message: 'Transfer successful',
             data: {
                 transfer: transfer[0],
                 sourceAccountBalance: sourceAccount.balance,
+                transactions: {
+                    outgoing: outgoingTransaction[0],
+                    incoming: incomingTransaction[0],
+                },
             },
         });
     }
     catch (error) {
         await session.abortTransaction();
         session.endSession();
+        console.error('Transfer error:', error);
         res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: 'Failed to process transfer',
@@ -275,7 +359,9 @@ exports.transfer = transfer;
 const getTransactions = async (req, res) => {
     try {
         const userId = req.user?.id;
-        const { limit = 10, page = 1, accountId } = req.query;
+        const { limit = 10, page = 1, accountId, transactionId } = req.query;
+        console.log('getTransactions called with userId:', userId);
+        console.log('Query params:', { limit, page, accountId, transactionId });
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
         const skip = (pageNum - 1) * limitNum;
@@ -284,12 +370,23 @@ const getTransactions = async (req, res) => {
         if (accountId && mongoose_1.default.Types.ObjectId.isValid(accountId)) {
             filter.accountId = accountId;
         }
+        // Special case for direct transaction lookup
+        if (transactionId) {
+            filter.transactionId = transactionId;
+            console.log('Searching for specific transactionId:', transactionId);
+        }
+        console.log('Filter:', filter);
         const transactions = await Transaction_1.default.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limitNum)
             .populate('accountId', 'accountNumber name');
+        console.log(`Found ${transactions.length} transactions for user ${userId}`);
+        if (transactionId && transactions.length > 0) {
+            console.log('Found transaction by ID:', transactions[0]._id);
+        }
         const total = await Transaction_1.default.countDocuments(filter);
+        console.log(`Total transactions for this filter: ${total}`);
         res.status(http_status_codes_1.StatusCodes.OK).json({
             success: true,
             count: transactions.length,
@@ -299,6 +396,7 @@ const getTransactions = async (req, res) => {
         });
     }
     catch (error) {
+        console.error('Error in getTransactions:', error);
         res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: 'Failed to fetch transactions',
@@ -310,33 +408,281 @@ exports.getTransactions = getTransactions;
 /**
  * Get a single transaction by ID
  * @route GET /api/transactions/:id
+ * @route GET /api/transactions/by-transaction-id/:transactionId
  * @access Private
  */
 const getTransaction = async (req, res) => {
     try {
         const userId = req.user?.id;
-        const { id } = req.params;
-        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+        // Check which parameter is present - id or transactionId
+        const id = req.params.id || req.params.transactionId;
+        if (!id) {
             return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
                 success: false,
-                message: 'Invalid transaction ID',
+                message: 'Transaction ID is required',
             });
         }
-        const transaction = await Transaction_1.default.findOne({ _id: id, userId })
-            .populate('accountId', 'accountNumber name')
-            .populate('transferId');
+        console.log(`Getting transaction ${id} for user ${userId}`);
+        console.log(`Request params:`, req.params);
+        console.log(`Request path:`, req.path);
+        // Determine if this was called with transactionId param specifically
+        const isTransactionIdRoute = req.path.includes('by-transaction-id') || !!req.params.transactionId;
+        console.log(`Using ${isTransactionIdRoute ? 'transaction ID' : 'MongoDB ID'} lookup route`);
+        // Get a list of all user's transactions for debugging
+        const allTransactionIds = await Transaction_1.default.find({ userId })
+            .select('_id transactionId type createdAt')
+            .sort({ createdAt: -1 })
+            .limit(10);
+        console.log(`User has ${allTransactionIds.length} recent transactions`);
+        if (allTransactionIds.length > 0) {
+            console.log('Available transactions:');
+            allTransactionIds.forEach((t, i) => console.log(`${i + 1}. _id: ${t._id}, transactionId: ${t.transactionId}`));
+        }
+        // Multiple search strategies with better error handling
+        let transaction = null;
+        let errors = [];
+        // First search by transaction ID if it starts with TXN (our standard prefix)
+        if (id.toString().startsWith('TXN')) {
+            try {
+                console.log(`ID starts with TXN, prioritizing transactionId search`);
+                // First relaxed search - might be more tolerant
+                const txnResults = await Transaction_1.default.find({
+                    transactionId: { $regex: id, $options: 'i' },
+                })
+                    .populate('accountId', 'accountNumber name')
+                    .sort({ createdAt: -1 })
+                    .limit(1)
+                    .exec();
+                if (txnResults && txnResults.length > 0) {
+                    transaction = txnResults[0];
+                    console.log(`Found transaction by TXN prefix search: ${transaction.transactionId}`);
+                }
+                else {
+                    errors.push('Not found by TXN prefix search');
+                    // Try other search methods
+                    transaction = await Transaction_1.default.findOne({
+                        $or: [
+                            { transactionId: id },
+                            { transactionId: { $regex: `^${id}$`, $options: 'i' } },
+                        ],
+                    })
+                        .populate('accountId', 'accountNumber name')
+                        .populate('transferId');
+                    if (transaction) {
+                        console.log(`Found transaction by exact TXN match: ${transaction.transactionId}`);
+                    }
+                    else {
+                        errors.push('Not found by exact TXN match');
+                    }
+                }
+            }
+            catch (err) {
+                errors.push(`Error searching with TXN prefix: ${err.message}`);
+            }
+        }
+        // Get a sample of transactions for this user to help debug
+        const sampleTransactions = await Transaction_1.default.find({ userId })
+            .sort({ createdAt: -1 })
+            .limit(3);
+        console.log(`User has ${sampleTransactions.length} recent transactions.`);
+        if (sampleTransactions.length > 0) {
+            console.log('Sample transactions:');
+            sampleTransactions.forEach((t, i) => {
+                console.log(`${i + 1}. _id: ${t._id}, transactionId: ${t.transactionId}`);
+            });
+        }
+        // If transaction still not found, try using the specific transactionId route
+        if (!transaction && isTransactionIdRoute) {
+            try {
+                console.log(`Trying to find by exact transactionId: ${id}`);
+                // Check without userId constraint first
+                const anyTransaction = await Transaction_1.default.findOne({
+                    transactionId: id,
+                });
+                if (anyTransaction) {
+                    // Now check if it belongs to this user
+                    if (anyTransaction.userId === userId) {
+                        transaction = anyTransaction;
+                        await transaction.populate('accountId', 'accountNumber name');
+                        await transaction.populate('transferId');
+                        console.log(`Found transaction by transactionId: ${transaction.transactionId}`);
+                    }
+                    else {
+                        errors.push(`Transaction found but belongs to another user: ${anyTransaction.userId}`);
+                    }
+                }
+                else {
+                    errors.push('Not found by exact transactionId');
+                }
+            }
+            catch (err) {
+                errors.push(`Error finding by transactionId: ${err.message}`);
+            }
+        }
+        // Try MongoDB ObjectID match if not already found
+        if (!transaction && mongoose_1.default.Types.ObjectId.isValid(id)) {
+            try {
+                console.log(`Attempting to find transaction by MongoDB _id: ${id}`);
+                transaction = await Transaction_1.default.findOne({ _id: id, userId })
+                    .populate('accountId', 'accountNumber name')
+                    .populate('transferId');
+                if (transaction) {
+                    console.log(`Found transaction by MongoDB _id: ${transaction._id}`);
+                }
+                else {
+                    errors.push('Not found by MongoDB _id');
+                    // Try without userId constraint
+                    const anyTransaction = await Transaction_1.default.findOne({ _id: id });
+                    if (anyTransaction) {
+                        console.log(`Found transaction but belongs to user ${anyTransaction.userId}, not ${userId}`);
+                        errors.push(`Transaction belongs to another user: ${anyTransaction.userId}`);
+                    }
+                }
+            }
+            catch (err) {
+                errors.push(`Error finding by _id: ${err.message}`);
+            }
+        }
+        // Try case-insensitive and partial matching if still not found
+        if (!transaction && !isTransactionIdRoute) {
+            try {
+                console.log(`Trying case-insensitive transactionId match for: ${id}`);
+                transaction = await Transaction_1.default.findOne({
+                    transactionId: { $regex: new RegExp('^' + id + '$', 'i') },
+                    userId,
+                })
+                    .populate('accountId', 'accountNumber name')
+                    .populate('transferId');
+                if (transaction) {
+                    console.log(`Found transaction by case-insensitive transactionId: ${transaction.transactionId}`);
+                }
+                else {
+                    errors.push('Not found by case-insensitive transactionId');
+                    // Try partial matching as last resort
+                    transaction = await Transaction_1.default.findOne({
+                        $or: [
+                            { transactionId: { $regex: id, $options: 'i' } },
+                            { _id: { $regex: id, $options: 'i' } },
+                        ],
+                        userId,
+                    })
+                        .populate('accountId', 'accountNumber name')
+                        .populate('transferId');
+                    if (transaction) {
+                        console.log(`Found transaction by partial match: ${transaction._id}`);
+                    }
+                    else {
+                        errors.push('Not found by partial match');
+                    }
+                }
+            }
+            catch (err) {
+                errors.push(`Error in flexible matching: ${err.message}`);
+            }
+        }
+        // As a last resort, try to find any transaction with this ID, ignoring user constraint
         if (!transaction) {
+            try {
+                const anyTransaction = await Transaction_1.default.findOne({
+                    $or: [
+                        { transactionId: id },
+                        { _id: id },
+                        { transactionId: { $regex: id, $options: 'i' } },
+                    ],
+                });
+                if (anyTransaction) {
+                    console.log(`Found transaction with ID ${id} but it belongs to user ${anyTransaction.userId}`);
+                    errors.push(`Transaction found but belongs to user ${anyTransaction.userId}, not ${userId}`);
+                }
+                else {
+                    console.log(`No transaction found with ID ${id} in the entire database`);
+                    errors.push(`Transaction ID not found in database`);
+                }
+            }
+            catch (error) {
+                console.error(`Error in last-resort search:`, error);
+            }
+        }
+        if (!transaction) {
+            console.log(`Transaction not found for ID: ${id} and user: ${userId}`);
+            console.log('Search errors:', errors.join(', '));
+            // Log some sample transactions to help with debugging
+            const recentTransactions = await Transaction_1.default.find({ userId })
+                .sort({ createdAt: -1 })
+                .limit(3)
+                .select('_id transactionId type amount createdAt');
+            if (recentTransactions.length > 0) {
+                console.log('Recent transactions for this user:');
+                recentTransactions.forEach((t, i) => {
+                    console.log(`${i + 1}. ID: ${t._id}, transactionId: ${t.transactionId}, createdAt: ${t.createdAt}`);
+                });
+            }
+            else {
+                console.log('No recent transactions found for this user.');
+            }
             return res.status(http_status_codes_1.StatusCodes.NOT_FOUND).json({
                 success: false,
-                message: 'Transaction not found',
+                message: `Transaction not found. Tried ${errors.length} search methods.`,
+                details: {
+                    errors,
+                    userId,
+                    searchParams: {
+                        id,
+                        isTransactionIdRoute,
+                        isObjectId: mongoose_1.default.Types.ObjectId.isValid(id),
+                    },
+                    recentTransactions: recentTransactions.map((t) => ({
+                        _id: t._id,
+                        transactionId: t.transactionId,
+                        createdAt: t.createdAt,
+                    })),
+                },
             });
+        }
+        console.log(`Transaction found: ${transaction._id}, transactionId: ${transaction.transactionId}, type: ${transaction.type}`);
+        // Enhance response with additional details based on transaction type
+        const enhancedTransaction = transaction.toObject();
+        // Add formatted date string for convenience
+        enhancedTransaction.formattedDate = transaction.date
+            ? new Date(transaction.date).toLocaleString()
+            : new Date(transaction.createdAt).toLocaleString();
+        // Add specific details based on transaction type
+        switch (transaction.type) {
+            case Transaction_2.TransactionType.DEPOSIT:
+                // Extract reference number from description if present
+                const refMatch = transaction.description.match(/Ref: ([A-Z0-9]+)/i);
+                if (refMatch && refMatch[1]) {
+                    enhancedTransaction.referenceNumber = refMatch[1];
+                }
+                break;
+            case Transaction_2.TransactionType.WITHDRAWAL:
+                // Extract withdrawal method if present
+                const methodMatch = transaction.description.match(/^([A-Za-z\s]+)/);
+                if (methodMatch && methodMatch[1]) {
+                    enhancedTransaction.method = methodMatch[1].trim();
+                }
+                break;
+            case Transaction_2.TransactionType.TRANSFER:
+            case Transaction_2.TransactionType.TRANSFER_RECEIVED:
+                // Could add more transfer-specific details
+                const accountMatch = transaction.description.match(/account ending in (\d+)/);
+                if (accountMatch && accountMatch[1]) {
+                    enhancedTransaction.relatedAccountNumber = accountMatch[1];
+                }
+                break;
+            default:
+                // No special handling for other transaction types
+                break;
         }
         res.status(http_status_codes_1.StatusCodes.OK).json({
             success: true,
-            data: { transaction },
+            data: {
+                transaction: enhancedTransaction,
+            },
         });
     }
     catch (error) {
+        console.error('Error in getTransaction controller:', error);
         res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: 'Failed to fetch transaction',
@@ -345,3 +691,50 @@ const getTransaction = async (req, res) => {
     }
 };
 exports.getTransaction = getTransaction;
+/**
+ * Get recent transactions for a user
+ * @route GET /api/transactions/recent
+ * @access Private
+ */
+const getRecentTransactions = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const { limit = 5 } = req.query;
+        console.log('getRecentTransactions called with userId:', userId);
+        console.log('Query params:', { limit });
+        // Set cache control headers to prevent caching
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        const limitNum = parseInt(limit, 10);
+        // Find the most recent transactions for this user
+        const transactions = await Transaction_1.default.find({ userId })
+            .sort({ createdAt: -1 })
+            .limit(limitNum)
+            .populate('accountId', 'accountNumber name');
+        console.log(`Found ${transactions.length} recent transactions for user ${userId}`);
+        if (transactions.length > 0) {
+            console.log('First transaction:', {
+                id: transactions[0]._id,
+                type: transactions[0].type,
+                amount: transactions[0].amount,
+                description: transactions[0].description,
+                date: transactions[0].date,
+            });
+        }
+        res.status(http_status_codes_1.StatusCodes.OK).json({
+            success: true,
+            count: transactions.length,
+            data: { transactions },
+        });
+    }
+    catch (error) {
+        console.error('Error fetching recent transactions:', error);
+        res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: 'Failed to fetch recent transactions',
+            error: error.message,
+        });
+    }
+};
+exports.getRecentTransactions = getRecentTransactions;

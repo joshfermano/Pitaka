@@ -14,7 +14,7 @@ const db_1 = require("./config/db");
 const seedData_1 = require("./data/seedData");
 const authMiddleware_1 = require("./middlewares/authMiddleware");
 const routes_1 = require("./routes");
-const PORT = process.env.PORT || 6000;
+const PORT = process.env.PORT || 5000;
 const app = (0, express_1.default)();
 // Allowed origins for CORS
 const allowedOrigins = [
@@ -27,49 +27,53 @@ const allowedOrigins = [
     'http://127.0.0.1:6000',
     'http://127.0.0.1:19006',
     'http://127.0.0.1:19000',
-    // Production URLs
-    'https://pitaka-client.vercel.app',
-    'https://pitaka-app.example.com',
-    // Additional entries for Android and iOS testing
-    'capacitor://localhost',
-    'ionic://localhost',
-    'http://10.0.2.2:6000', // Android emulator pointing to localhost
-    'http://10.0.2.2:19000', // Android emulator pointing to Expo dev server
-    'http://192.168.1.1:6000', // Common local network IP
+    // Mobile device testing with Expo Go
+    'exp://localhost:19000',
+    'exp://127.0.0.1:19000',
+    // Add your specific local network IP - crucial for Expo Go on physical devices
+    'http://192.168.1.10:19000',
+    'exp://192.168.1.10:19000',
+    'http://192.168.1.10:6000',
+    'http://192.168.1.10:8081',
+    'http://192.168.1.12:19000',
+    'exp://192.168.1.12:19000',
+    'http://192.168.1.12:6000',
+    'http://192.168.1.12:8081',
+    // Android emulator special IP
+    'http://10.0.2.2:19000',
+    'exp://10.0.2.2:19000',
+    'http://10.0.2.2:6000',
+    // Wildcard for development
+    '*',
+    // If your app is hosted, add the production URLs here
 ];
-// CORS configuration with more specific settings
 app.use((0, cors_1.default)({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin)
-            return callback(null, true);
-        // Allow all origins in development for easier testing
+        console.log(`CORS request from origin: ${origin || 'No origin (likely mobile app)'}`);
+        // During development, allow all origins
         if (process.env.NODE_ENV === 'development') {
+            console.log('Development mode: Allowing all origins');
+            return callback(null, true);
+        }
+        // Allow requests with no origin (like mobile apps)
+        if (!origin) {
+            console.log('CORS: Allowing request with no origin (mobile app)');
             return callback(null, true);
         }
         // In production, check against the allowed origins list
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
             callback(null, true);
         }
         else {
-            console.warn(`Origin ${origin} not allowed by CORS`);
-            // Still allow for testing, log warning only
-            callback(null, true);
+            console.warn(`CORS: Origin ${origin} not allowed in production`);
+            callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true, // Allow passing cookies and authentication
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        'X-Requested-With',
-        'Accept',
-        'Origin',
-    ],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     exposedHeaders: ['Set-Cookie'],
-    optionsSuccessStatus: 200, // For legacy browser support
 }));
-// For preflight requests
 app.options('*', (0, cors_1.default)());
 // Other middlewares
 app.use((0, helmet_1.default)({
@@ -79,14 +83,15 @@ app.use((0, morgan_1.default)('dev'));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
-// Set common CORS headers for all responses
-app.use((req, res, next) => {
-    // Set Access-Control-Allow-Credentials to true for all responses
-    res.header('Access-Control-Allow-Credentials', 'true');
+// Disable caching for API responses
+app.use('/api', (req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     next();
 });
 // Routes
-app.get('/', (req, res) => {
+app.get('/api/health', (req, res) => {
     res.send('Pitaka API is running');
 });
 // API Routes
@@ -97,6 +102,17 @@ app.use('/api/payments', routes_1.paymentRoutes);
 app.use('/api/loans', routes_1.loanRoutes);
 app.use('/api/savings', routes_1.savingsRoutes);
 app.use('/api/investments', routes_1.investmentRoutes);
+app.use('/api/cards', routes_1.cardRoutes);
+// Add detailed logging for transfer routes
+app.use('/api/transfers', (req, res, next) => {
+    console.log(`Transfer route hit: ${req.method} ${req.originalUrl}`, {
+        params: req.params,
+        body: req.body,
+        user: req.user,
+    });
+    next();
+}, routes_1.transferRoutes);
+app.use('/api/users', routes_1.userRoutes);
 // Simple status route to check if the server is running
 app.get('/api/status', (req, res) => {
     console.log('Status endpoint hit');
@@ -134,7 +150,37 @@ const startServer = async () => {
             console.log(`✨ Server running on port: ${PORT}`);
             console.log(`🔗 API URL: http://localhost:${PORT}`);
             console.log(`🌐 For Android emulator: http://10.0.2.2:${PORT}`);
+            console.log(`🌐 For iOS simulator: http://localhost:${PORT}`);
             console.log(`🌐 For web testing: http://localhost:${PORT}`);
+            // Get local network IP for physical device testing
+            try {
+                const { networkInterfaces } = require('os');
+                const nets = networkInterfaces();
+                const results = Object.create(null);
+                for (const name of Object.keys(nets)) {
+                    for (const net of nets[name]) {
+                        // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+                        if (net.family === 'IPv4' && !net.internal) {
+                            if (!results[name]) {
+                                results[name] = [];
+                            }
+                            results[name].push(net.address);
+                        }
+                    }
+                }
+                console.log('🔥 Available on your network at:');
+                for (const [key, value] of Object.entries(results)) {
+                    if (Array.isArray(value)) {
+                        value.forEach((ip) => {
+                            console.log(`   http://${ip}:${PORT} (${key})`);
+                        });
+                    }
+                }
+                console.log('👉 For Expo Go testing on physical devices, use your network IP');
+            }
+            catch (error) {
+                console.log('⚠️ Could not determine network IP addresses');
+            }
         });
     }
     catch (error) {

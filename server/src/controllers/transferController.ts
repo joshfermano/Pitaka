@@ -304,13 +304,19 @@ export const transferBetweenOwnAccounts = async (
     // Generate reference number
     const reference = `TRF${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
+    // Generate a transaction ID for the related transactions
+    const transactionId = Transaction.generateTransactionId();
+
     // Create transfer record
     const transfer = await Transfer.create(
       [
         {
           userId,
-          fromAccountId,
-          toAccountId,
+          senderId: userId,
+          senderAccountId: fromAccountId,
+          recipientId: userId, // For internal transfers, sender is also recipient
+          recipientAccountId: toAccountId,
+          recipientAccountNumber: toAccount.accountNumber,
           amount: amountNum,
           fee: 0, // No fee for internal transfers
           type: TransferType.INTERNAL,
@@ -321,17 +327,18 @@ export const transferBetweenOwnAccounts = async (
           reference,
         },
       ],
-      { session }
+      { session, ordered: true }
     );
 
     // Create transaction records
     await Transaction.create(
       [
         {
+          transactionId: `S${transactionId}`, // Add unique transaction ID for sender
           userId,
           accountId: fromAccountId,
           type: TransactionType.TRANSFER,
-          amount: amountNum,
+          amount: -amountNum, // Negative for outgoing
           description:
             description ||
             `Transfer to ${toAccount.name || toAccount.accountNumber}`,
@@ -339,10 +346,11 @@ export const transferBetweenOwnAccounts = async (
           status: 'COMPLETED',
         },
         {
+          transactionId: `R${transactionId}`, // Add unique transaction ID for recipient
           userId,
           accountId: toAccountId,
           type: TransactionType.TRANSFER_RECEIVED,
-          amount: amountNum,
+          amount: amountNum, // Positive for incoming
           description:
             description ||
             `Received from ${fromAccount.name || fromAccount.accountNumber}`,
@@ -350,7 +358,7 @@ export const transferBetweenOwnAccounts = async (
           status: 'COMPLETED',
         },
       ],
-      { session }
+      { session, ordered: true }
     );
 
     await session.commitTransaction();
@@ -388,11 +396,24 @@ export const transferToAnotherUser = async (req: Request, res: Response) => {
   session.startTransaction();
 
   try {
+    // Get user ID from authenticated user
     const senderId = req.user?.id;
+
+    // Enhanced debugging information
+    console.log('Transfer to another user request:', {
+      path: req.path,
+      method: req.method,
+      user: req.user,
+      body: req.body,
+      headers: req.headers['content-type'],
+      senderId,
+    });
+
     const { fromAccountId, recipientAccountNumber, amount, description } =
       req.body;
 
     if (!senderId) {
+      console.error('Transfer failed: User not authenticated');
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
         message: 'User not authenticated',
@@ -401,6 +422,11 @@ export const transferToAnotherUser = async (req: Request, res: Response) => {
 
     // Validate input
     if (!fromAccountId || !recipientAccountNumber || !amount) {
+      console.error('Transfer failed: Missing required fields', {
+        fromAccountId,
+        recipientAccountNumber,
+        amount,
+      });
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message:
@@ -410,11 +436,14 @@ export const transferToAnotherUser = async (req: Request, res: Response) => {
 
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
+      console.error('Transfer failed: Invalid amount', { amount });
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Amount must be a positive number',
       });
     }
+
+    console.log('Finding sender account:', { fromAccountId, userId: senderId });
 
     // Check if sender account exists
     const senderAccount = await Account.findOne({
@@ -423,6 +452,10 @@ export const transferToAnotherUser = async (req: Request, res: Response) => {
     }).session(session);
 
     if (!senderAccount) {
+      console.error('Transfer failed: Sender account not found', {
+        fromAccountId,
+        userId: senderId,
+      });
       return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Sender account not found',
@@ -431,18 +464,46 @@ export const transferToAnotherUser = async (req: Request, res: Response) => {
 
     // Check if sender has sufficient balance
     if (senderAccount.balance < amountNum) {
+      console.error('Transfer failed: Insufficient balance', {
+        balance: senderAccount.balance,
+        amount: amountNum,
+      });
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Insufficient balance',
       });
     }
 
-    // Find recipient account by account number
+    // Normalize the account number by removing spaces and other non-alphanumeric characters
+    const normalizedAccountNumber = recipientAccountNumber.replace(/\D/g, '');
+
+    console.log('Finding recipient account:', {
+      recipientAccountNumber,
+      normalizedAccountNumber,
+    });
+
+    // Find recipient account by account number with flexible matching
     const recipientAccount = await Account.findOne({
-      accountNumber: recipientAccountNumber,
+      $or: [
+        { accountNumber: recipientAccountNumber },
+        { accountNumber: normalizedAccountNumber },
+        // Also try with the account number as a regex to match regardless of formatting
+        {
+          accountNumber: {
+            $regex: normalizedAccountNumber.replace(
+              /(\d{4})/g,
+              '$1[^a-zA-Z0-9]*'
+            ),
+          },
+        },
+      ],
     }).session(session);
 
     if (!recipientAccount) {
+      console.error('Transfer failed: Recipient account not found', {
+        recipientAccountNumber,
+        normalizedAccountNumber,
+      });
       return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Recipient account not found',
@@ -451,6 +512,7 @@ export const transferToAnotherUser = async (req: Request, res: Response) => {
 
     // Make sure sender isn't sending to their own account
     if (recipientAccount.userId.toString() === senderId) {
+      console.error('Transfer failed: Cannot transfer to own account');
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message:
@@ -477,76 +539,100 @@ export const transferToAnotherUser = async (req: Request, res: Response) => {
     // Generate reference number
     const reference = `EXT${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-    // Create transfer record
+    // First, create or find the transfer recipient
+    let recipient;
+
+    const existingRecipient = await TransferRecipient.findOne({
+      userId: senderId,
+      accountNumber: recipientAccount.accountNumber, // Use the recipient's actual account number from the database
+    }).session(session);
+
+    if (existingRecipient) {
+      recipient = existingRecipient;
+    } else {
+      const newRecipient = await TransferRecipient.create(
+        [
+          {
+            userId: senderId,
+            name: recipientName,
+            accountNumber: recipientAccount.accountNumber, // Use the recipient's actual account number from the database
+            isFavorite: false,
+          },
+        ],
+        { session }
+      );
+      recipient = newRecipient[0];
+    }
+
+    console.log('Creating transfer record with:', {
+      senderId,
+      senderAccountId: fromAccountId,
+      recipientId: recipient._id,
+    });
+
+    // Generate a transaction ID for the related transactions
+    const transactionId = Transaction.generateTransactionId();
+
+    // Create transfer record with the required fields
     const transfer = await Transfer.create(
       [
         {
-          userId: senderId,
-          fromAccountId,
+          userId: senderId, // Required field
+          senderId: senderId,
+          senderAccountId: fromAccountId,
+          recipientId: recipient._id,
+          recipientAccountNumber: recipientAccount.accountNumber,
           recipientAccountId: recipientAccount._id,
           recipientUserId: recipientAccount.userId,
           amount: amountNum,
-          fee: 0, // No fee for transfers to other Pitaka users
+          fee: 0,
           type: TransferType.EXTERNAL,
           description: description || `Transfer to ${recipientName}`,
           status: 'COMPLETED',
           reference,
         },
       ],
-      { session }
+      { session, ordered: true } // Add ordered: true option
     );
 
     // Create transaction records for both sender and receiver
     await Transaction.create(
       [
         {
+          transactionId: `S${transactionId}`, // Add unique transaction ID for sender
           userId: senderId,
           accountId: fromAccountId,
           type: TransactionType.TRANSFER,
-          amount: amountNum,
+          amount: -amountNum, // Negative for outgoing
           description: description || `Transfer to ${recipientName}`,
           transferId: transfer[0]._id,
           status: 'COMPLETED',
         },
         {
+          transactionId: `R${transactionId}`, // Add unique transaction ID for recipient
           userId: recipientAccount.userId,
           accountId: recipientAccount._id,
           type: TransactionType.TRANSFER_RECEIVED,
-          amount: amountNum,
+          amount: amountNum, // Positive for incoming
           description: description
             ? `Received: ${description}`
-            : `Received from ${
-                senderAccount.name || senderAccount.accountNumber
-              }`,
+            : `Received from ${senderAccount.accountNumber}`,
           transferId: transfer[0]._id,
           status: 'COMPLETED',
         },
       ],
-      { session }
+      { session, ordered: true } // Add ordered: true option
     );
-
-    // Add recipient to sender's transfer recipients list if not already there
-    const existingRecipient = await TransferRecipient.findOne({
-      userId: senderId,
-      accountNumber: recipientAccountNumber,
-    }).session(session);
-
-    if (!existingRecipient) {
-      await TransferRecipient.create(
-        [
-          {
-            userId: senderId,
-            name: recipientName,
-            accountNumber: recipientAccountNumber,
-            isFavorite: false,
-          },
-        ],
-        { session }
-      );
-    }
 
     await session.commitTransaction();
     session.endSession();
+
+    console.log('Transfer completed successfully', {
+      transferId: transfer[0]._id,
+      amount: amountNum,
+      sender: senderId,
+      recipient: recipientAccount.userId,
+    });
 
     res.status(StatusCodes.OK).json({
       success: true,
@@ -590,7 +676,17 @@ export const transferToAnotherBank = async (req: Request, res: Response) => {
       description,
     } = req.body;
 
+    // Enhanced debugging information
+    console.log('Interbank transfer request:', {
+      path: req.path,
+      method: req.method,
+      user: req.user,
+      body: req.body,
+      userId,
+    });
+
     if (!userId) {
+      console.error('Transfer failed: User not authenticated');
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
         message: 'User not authenticated',
@@ -606,6 +702,14 @@ export const transferToAnotherBank = async (req: Request, res: Response) => {
       !bankCode ||
       !amount
     ) {
+      console.error('Transfer failed: Missing required fields', {
+        fromAccountId,
+        recipientName,
+        recipientAccountNumber,
+        bankName,
+        bankCode,
+        amount,
+      });
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message:
@@ -615,6 +719,7 @@ export const transferToAnotherBank = async (req: Request, res: Response) => {
 
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
+      console.error('Transfer failed: Invalid amount', { amount });
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Amount must be a positive number',
@@ -622,12 +727,17 @@ export const transferToAnotherBank = async (req: Request, res: Response) => {
     }
 
     // Check if account exists and belongs to user
+    console.log('Finding sender account:', { fromAccountId, userId });
     const fromAccount = await Account.findOne({
       _id: fromAccountId,
       userId,
     }).session(session);
 
     if (!fromAccount) {
+      console.error('Transfer failed: Account not found', {
+        fromAccountId,
+        userId,
+      });
       return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Account not found',
@@ -640,6 +750,10 @@ export const transferToAnotherBank = async (req: Request, res: Response) => {
 
     // Check if user has sufficient balance
     if (fromAccount.balance < totalAmount) {
+      console.error('Transfer failed: Insufficient balance', {
+        balance: fromAccount.balance,
+        amount: totalAmount,
+      });
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Insufficient balance including fee',
@@ -653,54 +767,26 @@ export const transferToAnotherBank = async (req: Request, res: Response) => {
     // Generate reference number
     const reference = `INT${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-    // Create transfer record
-    const transfer = await Transfer.create(
-      [
-        {
-          userId,
-          fromAccountId,
-          recipientName,
-          recipientAccountNumber,
-          bankName,
-          bankCode,
-          amount: amountNum,
-          fee,
-          type: TransferType.INTERBANK,
-          description:
-            description || `Transfer to ${recipientName} at ${bankName}`,
-          status: 'COMPLETED', // In a real system, this might be PENDING until confirmed
-          reference,
-        },
-      ],
-      { session }
-    );
+    // First, create a transfer recipient record if it doesn't exist
+    console.log('Finding or creating recipient:', {
+      userId,
+      recipientName,
+      recipientAccountNumber,
+      bankCode,
+    });
 
-    // Create transaction record
-    await Transaction.create(
-      [
-        {
-          userId,
-          accountId: fromAccountId,
-          type: TransactionType.TRANSFER,
-          amount: totalAmount,
-          description:
-            description || `Transfer to ${recipientName} at ${bankName}`,
-          transferId: transfer[0]._id,
-          status: 'COMPLETED',
-        },
-      ],
-      { session }
-    );
+    let recipient;
 
-    // Add to recipient list if not already there
     const existingRecipient = await TransferRecipient.findOne({
       userId,
       accountNumber: recipientAccountNumber,
       bankCode,
     }).session(session);
 
-    if (!existingRecipient) {
-      await TransferRecipient.create(
+    if (existingRecipient) {
+      recipient = existingRecipient;
+    } else {
+      const newRecipient = await TransferRecipient.create(
         [
           {
             userId,
@@ -713,10 +799,70 @@ export const transferToAnotherBank = async (req: Request, res: Response) => {
         ],
         { session }
       );
+      recipient = newRecipient[0];
     }
+
+    console.log('Creating interbank transfer record:', {
+      userId,
+      fromAccountId,
+      recipientId: recipient._id,
+    });
+
+    // Generate a transaction ID for the transaction
+    const transactionId = Transaction.generateTransactionId();
+
+    // Create transfer record
+    const transfer = await Transfer.create(
+      [
+        {
+          userId, // Required field
+          senderId: userId,
+          senderAccountId: fromAccountId,
+          recipientId: recipient._id,
+          recipientAccountNumber,
+          recipientUserId: null, // Set to null for interbank transfers
+          recipientAccountId: null, // Set to null for interbank transfers
+          bankName,
+          bankCode,
+          amount: amountNum,
+          fee,
+          type: TransferType.INTERBANK,
+          description:
+            description || `Transfer to ${recipientName} at ${bankName}`,
+          status: 'COMPLETED', // In a real system, this might be PENDING until confirmed
+          reference,
+        },
+      ],
+      { session, ordered: true }
+    );
+
+    // Create transaction record
+    await Transaction.create(
+      [
+        {
+          transactionId: transactionId, // Add the generated transaction ID
+          userId,
+          accountId: fromAccountId,
+          type: TransactionType.TRANSFER,
+          amount: -totalAmount, // Use negative amount for outgoing transfer
+          description:
+            description || `Transfer to ${recipientName} at ${bankName}`,
+          transferId: transfer[0]._id,
+          status: 'COMPLETED',
+        },
+      ],
+      { session, ordered: true }
+    );
 
     await session.commitTransaction();
     session.endSession();
+
+    console.log('Interbank transfer completed successfully', {
+      transferId: transfer[0]._id,
+      amount: amountNum,
+      fee,
+      sender: userId,
+    });
 
     res.status(StatusCodes.OK).json({
       success: true,

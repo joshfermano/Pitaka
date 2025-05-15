@@ -16,6 +16,10 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const getAccounts = async (req, res) => {
     try {
         const userId = req.user?.id;
+        // Set cache control headers to prevent caching
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         const accounts = await Account_1.default.find({ userId });
         res.status(http_status_codes_1.StatusCodes.OK).json({
             success: true,
@@ -41,6 +45,10 @@ const getAccount = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user?.id;
+        // Set cache control headers to prevent caching
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
             return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
                 success: false,
@@ -118,6 +126,10 @@ const getAccountBalance = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user?.id;
+        // Set cache control headers to prevent caching
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
             return res.status(http_status_codes_1.StatusCodes.BAD_REQUEST).json({
                 success: false,
@@ -161,6 +173,10 @@ const getAccountTransactions = async (req, res) => {
         const { id } = req.params;
         const userId = req.user?.id;
         const { limit = 10, page = 1 } = req.query;
+        // Set cache control headers to prevent caching
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
         const skip = (pageNum - 1) * limitNum;

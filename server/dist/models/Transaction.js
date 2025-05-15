@@ -40,6 +40,7 @@ var TransactionType;
     TransactionType["DEPOSIT"] = "DEPOSIT";
     TransactionType["WITHDRAWAL"] = "WITHDRAWAL";
     TransactionType["TRANSFER"] = "TRANSFER";
+    TransactionType["TRANSFER_RECEIVED"] = "TRANSFER_RECEIVED";
     TransactionType["INVESTMENT"] = "INVESTMENT";
     TransactionType["PAYMENT"] = "PAYMENT";
     TransactionType["LOAN_DISBURSEMENT"] = "LOAN_DISBURSEMENT";
@@ -58,6 +59,14 @@ const TransactionSchema = new mongoose_1.Schema({
         required: [true, 'Transaction ID is required'],
         unique: true,
         trim: true,
+    },
+    userId: {
+        type: String,
+        required: [true, 'User ID is required'],
+    },
+    accountId: {
+        type: String,
+        required: [true, 'Account ID is required'],
     },
     type: {
         type: String,
@@ -121,6 +130,10 @@ const TransactionSchema = new mongoose_1.Schema({
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Loan',
     },
+    savingsId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Savings',
+    },
     loanDetails: {
         loanType: {
             type: String,
@@ -158,5 +171,17 @@ TransactionSchema.static('generateTransactionId', function () {
         .toString()
         .padStart(4, '0');
     return `${prefix}${timestamp}${random}`;
+});
+// Add a pre-save hook to normalize transaction type
+TransactionSchema.pre('save', function (next) {
+    // Ensure type is always uppercase
+    if (this.type) {
+        this.type = this.type.toUpperCase();
+    }
+    // Ensure date is properly set if not already
+    if (!this.date) {
+        this.date = new Date();
+    }
+    next();
 });
 exports.default = mongoose_1.default.model('Transaction', TransactionSchema);

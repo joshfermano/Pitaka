@@ -1,21 +1,63 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const investmentController_1 = require("../controllers/investmentController");
+const investmentController = __importStar(require("../controllers/investmentController"));
 const authMiddleware_1 = require("../middlewares/authMiddleware");
 const router = express_1.default.Router();
-// All routes are protected
+// Public company routes (no auth required)
+router.get('/companies', investmentController.getAllCompanies);
+router.get('/companies/:id', investmentController.getCompanyById);
+// Add company price history endpoint
+router.get('/companies/:id/history', investmentController.getCompanyPriceHistory);
+// Protected routes - require authentication
 router.use(authMiddleware_1.protect);
-// Companies routes
-router.get('/companies', investmentController_1.getAllCompanies);
-router.get('/companies/:companyId', investmentController_1.getCompanyById);
-// Investments routes
-router.get('/user', investmentController_1.getUserInvestments);
-router.get('/user/:investmentId', investmentController_1.getInvestmentById);
-router.post('/buy', investmentController_1.buyShares);
-router.post('/sell', investmentController_1.sellShares);
-router.get('/performance', investmentController_1.getPerformance);
+// User investments routes
+router.get('/user', investmentController.getUserInvestments);
+router.get('/user/:id', investmentController.getInvestmentById);
+router.post('/buy', investmentController.buyShares);
+router.post('/sell', investmentController.sellShares);
+router.get('/performance', investmentController.getPerformance);
+// New transaction history route
+router.get('/transactions', investmentController.getTransactionHistory);
+// Price alerts routes
+router.get('/alerts', investmentController.getAlerts);
+router.post('/alerts/create', investmentController.createAlert);
+router.patch('/alerts/:id', investmentController.updateAlert);
+router.delete('/alerts/:id', investmentController.deleteAlert);
 exports.default = router;

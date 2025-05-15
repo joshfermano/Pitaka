@@ -57,11 +57,9 @@ const allowedOrigins = [
   // If your app is hosted, add the production URLs here
 ];
 
-// CORS configuration with more permissive settings for development
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Log all origins for debugging
       console.log(
         `CORS request from origin: ${origin || 'No origin (likely mobile app)'}`
       );
@@ -106,6 +104,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Add global request logger middleware before any routes
+app.use((req, res, next) => {
+  console.log(
+    `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} (${
+      req.path
+    })`
+  );
+  next();
+});
+
 // Disable caching for API responses
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -128,7 +136,21 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/savings', savingsRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/cards', cardRoutes);
-app.use('/api/transfers', transferRoutes);
+
+// Add detailed logging for transfer routes
+app.use(
+  '/api/transfers',
+  (req, res, next) => {
+    console.log(`Transfer route hit: ${req.method} ${req.originalUrl}`, {
+      params: req.params,
+      body: req.body,
+      user: req.user,
+    });
+    next();
+  },
+  transferRoutes
+);
+
 app.use('/api/users', userRoutes);
 
 // Simple status route to check if the server is running
@@ -165,7 +187,13 @@ const startServer = async () => {
 
       // Seed database with initial data if in development mode
       if (process.env.NODE_ENV === 'development') {
-        await seedDatabase();
+        try {
+          console.log('🌱 Seeding database with initial data...');
+          await seedDatabase();
+          console.log('✅ Database seeding completed');
+        } catch (error) {
+          console.error('Error during database seeding:', error);
+        }
       }
     }
 

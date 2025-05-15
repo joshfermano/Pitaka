@@ -20,6 +20,13 @@ router
     transactionController.getRecentTransactions as unknown as RequestHandler
   );
 
+// IMPORTANT: The specific route must come BEFORE the generic ID route
+// Get transaction by transactionId field specifically
+router
+  .route('/by-transaction-id/:transactionId')
+  .get(transactionController.getTransaction as unknown as RequestHandler);
+
+// Get transaction by MongoDB _id (must come AFTER more specific routes)
 router
   .route('/:id')
   .get(transactionController.getTransaction as unknown as RequestHandler);

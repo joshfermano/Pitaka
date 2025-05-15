@@ -67,8 +67,26 @@ const AutoTransferSchema = new mongoose_1.Schema({
     },
     frequency: {
         type: String,
-        enum: ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'NONE'],
+        enum: {
+            values: [
+                'WEEKLY',
+                'MONTHLY',
+                'QUARTERLY',
+                'NONE',
+                'weekly',
+                'monthly',
+                'quarterly',
+                'none',
+            ],
+            message: '{VALUE} is not a valid frequency',
+        },
         default: 'NONE',
+        // Custom setter to normalize values
+        set: (value) => {
+            if (!value)
+                return 'NONE';
+            return value.toUpperCase();
+        },
     },
     nextDate: {
         type: Date,
@@ -133,10 +151,24 @@ const SavingsAccountSchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
-// Pre-save middleware to calculate progress
+// Pre-save middleware to calculate progress and normalize data
 SavingsAccountSchema.pre('save', function (next) {
+    // Calculate progress
     if (this.targetAmount > 0) {
         this.progress = Math.min(this.currentAmount / this.targetAmount, 1);
+    }
+    // Normalize autoTransfer frequency to valid enum values
+    if (this.autoTransfer && this.autoTransfer.frequency) {
+        const frequency = this.autoTransfer.frequency.toString().toUpperCase();
+        // Validate against enum values
+        if (!['WEEKLY', 'MONTHLY', 'QUARTERLY', 'NONE'].includes(frequency)) {
+            // Default to NONE for invalid values
+            this.autoTransfer.frequency = 'NONE';
+        }
+        else {
+            // Set normalized value
+            this.autoTransfer.frequency = frequency;
+        }
     }
     next();
 });

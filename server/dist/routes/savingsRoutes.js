@@ -15,7 +15,15 @@ router
     .post(controllers_1.savingsController.createSavings)
     .get(controllers_1.savingsController.getSavings);
 // Get specific savings by ID
-router.route('/:id').get(controllers_1.savingsController.getSavingsById);
+router
+    .route('/:id')
+    .get(controllers_1.savingsController.getSavingsById)
+    .patch(controllers_1.savingsController.updateSavingsAccount)
+    .delete(controllers_1.savingsController.deleteSavingsAccount);
+// Transactions for specific savings
+router
+    .route('/:id/transactions')
+    .get(controllers_1.savingsController.getTransactionsForSavings);
 // Deposit and withdraw from savings
 router
     .route('/:id/deposit')

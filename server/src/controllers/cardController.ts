@@ -120,8 +120,9 @@ export const addCard = async (req: Request, res: Response) => {
       });
     }
 
-    // Format month as two digits
-    const formattedMonth = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
+    // Use the original expiryMonth value from the client
+    // without additional formatting
+    const preservedMonth = expiryMonth;
 
     // Validate year format (2-digit year)
     const yearNum = parseInt(expiryYear, 10);
@@ -177,7 +178,7 @@ export const addCard = async (req: Request, res: Response) => {
         cardNumber,
         maskedNumber,
         cardholderName,
-        expiryMonth: formattedMonth, // Use the formatted month
+        expiryMonth: preservedMonth, // Use the original month value
         expiryYear,
         cvv,
         type: cardType,
@@ -187,7 +188,7 @@ export const addCard = async (req: Request, res: Response) => {
       console.log('Attempting to create card with data:', {
         userId,
         cardholderName,
-        expiryMonth: formattedMonth,
+        expiryMonth: preservedMonth,
         expiryYear,
         type: cardType,
         isDefault: isDefault || false,

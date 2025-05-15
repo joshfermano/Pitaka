@@ -83,6 +83,11 @@ app.use((0, morgan_1.default)('dev'));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
+// Add global request logger middleware before any routes
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} (${req.path})`);
+    next();
+});
 // Disable caching for API responses
 app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -143,7 +148,14 @@ const startServer = async () => {
             console.log('✅ MongoDB connection successful');
             // Seed database with initial data if in development mode
             if (process.env.NODE_ENV === 'development') {
-                await (0, seedData_1.seedDatabase)();
+                try {
+                    console.log('🌱 Seeding database with initial data...');
+                    await (0, seedData_1.seedDatabase)();
+                    console.log('✅ Database seeding completed');
+                }
+                catch (error) {
+                    console.error('Error during database seeding:', error);
+                }
             }
         }
         app.listen(PORT, () => {

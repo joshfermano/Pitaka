@@ -37,4 +37,10 @@ router.get(
   loanController.getLoanPayments as unknown as RequestHandler
 );
 
+// Loan approval endpoint
+router.post(
+  '/:id/approve',
+  loanController.approveLoan as unknown as RequestHandler
+);
+
 export default router;

@@ -53,4 +53,6 @@ router
 router.route('/:id').get(loanController.getLoan);
 router.post('/:id/payment', loanController.makeLoanPayment);
 router.get('/:id/payments', loanController.getLoanPayments);
+// Loan approval endpoint
+router.post('/:id/approve', loanController.approveLoan);
 exports.default = router;

@@ -95,6 +95,10 @@ const TransactionSchema = new mongoose_1.Schema({
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Account',
     },
+    transferId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Transfer',
+    },
     description: {
         type: String,
         required: [true, 'Description is required'],
@@ -182,6 +186,21 @@ TransactionSchema.pre('save', function (next) {
     if (!this.date) {
         this.date = new Date();
     }
+    // If no transactionId is provided, generate one
+    if (!this.transactionId) {
+        // @ts-ignore
+        this.transactionId = this.constructor.generateTransactionId();
+    }
     next();
 });
-exports.default = mongoose_1.default.model('Transaction', TransactionSchema);
+const Transaction = mongoose_1.default.model('Transaction', TransactionSchema);
+// Add the static method directly to the model to ensure it's accessible
+Transaction.generateTransactionId = function () {
+    const prefix = 'TXN';
+    const timestamp = Date.now().toString();
+    const random = Math.floor(Math.random() * 10000)
+        .toString()
+        .padStart(4, '0');
+    return `${prefix}${timestamp}${random}`;
+};
+exports.default = Transaction;

@@ -77,6 +77,11 @@ const TransferRecipientSchema = new mongoose_1.Schema({
     timestamps: true,
 });
 const TransferSchema = new mongoose_1.Schema({
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, 'User ID is required'],
+    },
     senderId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User',

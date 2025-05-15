@@ -42,6 +42,7 @@ export interface ILoan extends Document {
   disbursementDate: Date;
   term: string;
   interest: string;
+  purpose: string;
   status:
     | 'PENDING'
     | 'APPROVED'
@@ -251,6 +252,11 @@ const LoanSchema = new Schema<ILoan, LoanModel>(
     interest: {
       type: String,
       required: [true, 'Interest rate is required'],
+      trim: true,
+    },
+    purpose: {
+      type: String,
+      required: [true, 'Loan purpose is required'],
       trim: true,
     },
     status: {

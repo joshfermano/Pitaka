@@ -158,6 +158,7 @@ const createPayment = async (req, res) => {
     try {
         const userId = req.user?.id;
         const { accountId, billerId, accountNumber, amount, description } = req.body;
+        console.log(`Processing payment: User ${userId}, Account ${accountId}, Biller ${billerId}`);
         if (!userId) {
             return res.status(http_status_codes_1.StatusCodes.UNAUTHORIZED).json({
                 success: false,
@@ -195,7 +196,7 @@ const createPayment = async (req, res) => {
             });
         }
         // Fetch biller details
-        const biller = await Payment_1.Biller.findById(billerId);
+        const biller = await Payment_1.Biller.findById(billerId).session(session);
         if (!biller) {
             return res.status(http_status_codes_1.StatusCodes.NOT_FOUND).json({
                 success: false,
@@ -221,58 +222,82 @@ const createPayment = async (req, res) => {
         }
         // Generate reference number
         const referenceNumber = Payment_1.Payment.generateReferenceNumber();
+        console.log(`Creating payment record: ${referenceNumber}`);
         // Create payment record with initial status
-        const paymentRecord = await Payment_1.Payment.create([
-            {
-                userId,
-                accountId,
-                billerId,
-                billerName: biller.name,
-                accountNumber,
-                amount: amountNum,
-                fee,
-                status: 'PENDING',
-                referenceNumber,
-            },
-        ], { session });
+        const payment = new Payment_1.Payment({
+            userId,
+            accountId,
+            billerId,
+            billerName: biller.name,
+            accountNumber,
+            amount: amountNum,
+            fee,
+            status: 'PENDING',
+            referenceNumber,
+        });
+        await payment.save({ session });
+        console.log(`Payment created: ${payment._id}`);
+        // Create transaction record
+        const txnId = mongoose_1.default.Types.ObjectId.createFromTime(new Date().getTime());
+        const transaction = new Transaction_1.default({
+            _id: txnId,
+            transactionId: Transaction_1.default.generateTransactionId(),
+            userId,
+            accountId,
+            type: 'PAYMENT',
+            amount: totalAmount,
+            fee: fee,
+            description: description || `Payment to ${biller.name}`,
+            status: 'COMPLETED',
+            merchantName: biller.name,
+            merchantLogo: biller.logo,
+            merchantCategory: biller.category,
+        });
+        await transaction.save({ session });
+        console.log(`Transaction created: ${transaction._id}`);
+        // Update payment with transaction ID and mark as completed
+        payment.transactionId = transaction._id;
+        payment.status = 'COMPLETED';
+        await payment.save({ session });
+        console.log(`Payment updated with transaction ID`);
         // Update account balance
         account.balance -= totalAmount;
         await account.save({ session });
-        // Create transaction record
-        const transaction = await Transaction_1.default.create([
-            {
-                userId,
-                accountId,
-                type: 'PAYMENT',
-                amount: totalAmount,
-                description: description || `Payment to ${biller.name}`,
-                paymentId: paymentRecord[0]._id,
-            },
-        ], { session });
-        // Update payment with transaction ID and mark as completed
-        if (transaction[0]?._id) {
-            paymentRecord[0].transactionId = transaction[0]
-                ._id;
-        }
-        paymentRecord[0].status = 'COMPLETED';
-        await paymentRecord[0].save({ session });
+        console.log(`Account balance updated: ${account.balance}`);
         await session.commitTransaction();
+        console.log('Transaction committed successfully');
         session.endSession();
         res.status(http_status_codes_1.StatusCodes.CREATED).json({
             success: true,
             message: 'Payment processed successfully',
             data: {
-                payment: paymentRecord[0],
+                payment,
                 newBalance: account.balance,
             },
         });
     }
     catch (error) {
+        console.error('Payment error details:', error);
         await session.abortTransaction();
         session.endSession();
-        res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
+        // More detailed error handling
+        let errorMessage = 'Failed to process payment';
+        let statusCode = http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR;
+        if (error.name === 'ValidationError') {
+            errorMessage =
+                'Validation error: ' +
+                    Object.values(error.errors)
+                        .map((err) => err.message)
+                        .join(', ');
+            statusCode = http_status_codes_1.StatusCodes.BAD_REQUEST;
+        }
+        else if (error.name === 'MongoServerError' && error.code === 11000) {
+            errorMessage = 'Duplicate payment detected';
+            statusCode = http_status_codes_1.StatusCodes.CONFLICT;
+        }
+        res.status(statusCode).json({
             success: false,
-            message: 'Failed to process payment',
+            message: errorMessage,
             error: error.message,
         });
     }

@@ -216,6 +216,11 @@ const LoanSchema = new mongoose_1.Schema({
         required: [true, 'Interest rate is required'],
         trim: true,
     },
+    purpose: {
+        type: String,
+        required: [true, 'Loan purpose is required'],
+        trim: true,
+    },
     status: {
         type: String,
         enum: [

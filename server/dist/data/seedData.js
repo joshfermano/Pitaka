@@ -292,7 +292,6 @@ const seedDatabase = async () => {
             await models.LoanProduct.create(loanProducts);
             console.log('✅ Loan Products seeded successfully');
         }
-        // Create banks
         if (bankCount === 0) {
             const banks = [
                 {

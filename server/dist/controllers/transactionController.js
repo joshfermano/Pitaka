@@ -442,9 +442,11 @@ const getTransaction = async (req, res) => {
         let transaction = null;
         let errors = [];
         // First search by transaction ID if it starts with TXN (our standard prefix)
-        if (id.toString().startsWith('TXN')) {
+        if (id.toString().startsWith('TXN') ||
+            id.toString().startsWith('S') ||
+            id.toString().startsWith('R')) {
             try {
-                console.log(`ID starts with TXN, prioritizing transactionId search`);
+                console.log(`ID starts with TXN/S/R, prioritizing transactionId search`);
                 // First relaxed search - might be more tolerant
                 const txnResults = await Transaction_1.default.find({
                     transactionId: { $regex: id, $options: 'i' },
@@ -455,29 +457,27 @@ const getTransaction = async (req, res) => {
                     .exec();
                 if (txnResults && txnResults.length > 0) {
                     transaction = txnResults[0];
-                    console.log(`Found transaction by TXN prefix search: ${transaction.transactionId}`);
+                    console.log(`Found transaction by TXN/S/R prefix search: ${transaction.transactionId}`);
                 }
                 else {
-                    errors.push('Not found by TXN prefix search');
+                    errors.push('Not found by TXN/S/R prefix search');
                     // Try other search methods
                     transaction = await Transaction_1.default.findOne({
                         $or: [
                             { transactionId: id },
                             { transactionId: { $regex: `^${id}$`, $options: 'i' } },
                         ],
-                    })
-                        .populate('accountId', 'accountNumber name')
-                        .populate('transferId');
+                    }).populate('accountId', 'accountNumber name');
                     if (transaction) {
-                        console.log(`Found transaction by exact TXN match: ${transaction.transactionId}`);
+                        console.log(`Found transaction by exact match: ${transaction.transactionId}`);
                     }
                     else {
-                        errors.push('Not found by exact TXN match');
+                        errors.push('Not found by exact match');
                     }
                 }
             }
             catch (err) {
-                errors.push(`Error searching with TXN prefix: ${err.message}`);
+                errors.push(`Error searching with TXN/S/R prefix: ${err.message}`);
             }
         }
         // Get a sample of transactions for this user to help debug
@@ -504,7 +504,6 @@ const getTransaction = async (req, res) => {
                     if (anyTransaction.userId === userId) {
                         transaction = anyTransaction;
                         await transaction.populate('accountId', 'accountNumber name');
-                        await transaction.populate('transferId');
                         console.log(`Found transaction by transactionId: ${transaction.transactionId}`);
                     }
                     else {
@@ -523,9 +522,7 @@ const getTransaction = async (req, res) => {
         if (!transaction && mongoose_1.default.Types.ObjectId.isValid(id)) {
             try {
                 console.log(`Attempting to find transaction by MongoDB _id: ${id}`);
-                transaction = await Transaction_1.default.findOne({ _id: id, userId })
-                    .populate('accountId', 'accountNumber name')
-                    .populate('transferId');
+                transaction = await Transaction_1.default.findOne({ _id: id, userId }).populate('accountId', 'accountNumber name');
                 if (transaction) {
                     console.log(`Found transaction by MongoDB _id: ${transaction._id}`);
                 }
@@ -550,57 +547,16 @@ const getTransaction = async (req, res) => {
                 transaction = await Transaction_1.default.findOne({
                     transactionId: { $regex: new RegExp('^' + id + '$', 'i') },
                     userId,
-                })
-                    .populate('accountId', 'accountNumber name')
-                    .populate('transferId');
+                }).populate('accountId', 'accountNumber name');
                 if (transaction) {
                     console.log(`Found transaction by case-insensitive transactionId: ${transaction.transactionId}`);
                 }
                 else {
                     errors.push('Not found by case-insensitive transactionId');
-                    // Try partial matching as last resort
-                    transaction = await Transaction_1.default.findOne({
-                        $or: [
-                            { transactionId: { $regex: id, $options: 'i' } },
-                            { _id: { $regex: id, $options: 'i' } },
-                        ],
-                        userId,
-                    })
-                        .populate('accountId', 'accountNumber name')
-                        .populate('transferId');
-                    if (transaction) {
-                        console.log(`Found transaction by partial match: ${transaction._id}`);
-                    }
-                    else {
-                        errors.push('Not found by partial match');
-                    }
                 }
             }
             catch (err) {
                 errors.push(`Error in flexible matching: ${err.message}`);
-            }
-        }
-        // As a last resort, try to find any transaction with this ID, ignoring user constraint
-        if (!transaction) {
-            try {
-                const anyTransaction = await Transaction_1.default.findOne({
-                    $or: [
-                        { transactionId: id },
-                        { _id: id },
-                        { transactionId: { $regex: id, $options: 'i' } },
-                    ],
-                });
-                if (anyTransaction) {
-                    console.log(`Found transaction with ID ${id} but it belongs to user ${anyTransaction.userId}`);
-                    errors.push(`Transaction found but belongs to user ${anyTransaction.userId}, not ${userId}`);
-                }
-                else {
-                    console.log(`No transaction found with ID ${id} in the entire database`);
-                    errors.push(`Transaction ID not found in database`);
-                }
-            }
-            catch (error) {
-                console.error(`Error in last-resort search:`, error);
             }
         }
         if (!transaction) {
@@ -640,6 +596,21 @@ const getTransaction = async (req, res) => {
             });
         }
         console.log(`Transaction found: ${transaction._id}, transactionId: ${transaction.transactionId}, type: ${transaction.type}`);
+        // Handle the case when the transaction has a transferId
+        if (transaction.transferId) {
+            console.log(`Transaction has transferId: ${transaction.transferId}, attempting to populate`);
+            try {
+                // Populate the transferId with Transfer details
+                await transaction.populate({
+                    path: 'transferId',
+                    select: 'senderId senderAccountId recipientAccountNumber recipientAccountId amount fee type description reference status createdAt',
+                });
+                console.log(`Successfully populated transferId: ${JSON.stringify(transaction.transferId || {})}`);
+            }
+            catch (err) {
+                console.error(`Error populating transferId: ${err}`);
+            }
+        }
         // Enhance response with additional details based on transaction type
         const enhancedTransaction = transaction.toObject();
         // Add formatted date string for convenience
@@ -664,10 +635,36 @@ const getTransaction = async (req, res) => {
                 break;
             case Transaction_2.TransactionType.TRANSFER:
             case Transaction_2.TransactionType.TRANSFER_RECEIVED:
-                // Could add more transfer-specific details
-                const accountMatch = transaction.description.match(/account ending in (\d+)/);
-                if (accountMatch && accountMatch[1]) {
-                    enhancedTransaction.relatedAccountNumber = accountMatch[1];
+                // Handle transfer-specific details
+                if (transaction.transferId) {
+                    enhancedTransaction.transfer = transaction.transferId;
+                    // Add the related account number
+                    if (transaction.type === Transaction_2.TransactionType.TRANSFER) {
+                        // For outgoing transfers, the recipient account is the related one
+                        enhancedTransaction.relatedAccountNumber =
+                            enhancedTransaction.transfer.recipientAccountNumber;
+                    }
+                    else {
+                        // For incoming transfers, try to get the sender's account details
+                        try {
+                            const senderAccount = await Account_1.default.findById(enhancedTransaction.transfer.senderAccountId);
+                            if (senderAccount) {
+                                enhancedTransaction.relatedAccountNumber =
+                                    senderAccount.accountNumber;
+                            }
+                        }
+                        catch (err) {
+                            console.error(`Error getting sender account: ${err}`);
+                        }
+                    }
+                }
+                else {
+                    // Fallback to parsing from description if transferId not available
+                    const accountMatch = transaction.description.match(/(?:to|from) ([A-Za-z\s]+)|account ending in (\d+)/i);
+                    if (accountMatch) {
+                        enhancedTransaction.relatedAccountNumber =
+                            accountMatch[1] || accountMatch[2];
+                    }
                 }
                 break;
             default:

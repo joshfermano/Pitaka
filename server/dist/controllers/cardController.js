@@ -138,8 +138,9 @@ const addCard = async (req, res) => {
                 message: 'Invalid expiry month. Must be between 01-12',
             });
         }
-        // Format month as two digits
-        const formattedMonth = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
+        // Use the original expiryMonth value from the client
+        // without additional formatting
+        const preservedMonth = expiryMonth;
         // Validate year format (2-digit year)
         const yearNum = parseInt(expiryYear, 10);
         const currentYear = new Date().getFullYear() % 100;
@@ -184,7 +185,7 @@ const addCard = async (req, res) => {
                 cardNumber,
                 maskedNumber,
                 cardholderName,
-                expiryMonth: formattedMonth, // Use the formatted month
+                expiryMonth: preservedMonth, // Use the original month value
                 expiryYear,
                 cvv,
                 type: cardType,
@@ -193,7 +194,7 @@ const addCard = async (req, res) => {
             console.log('Attempting to create card with data:', {
                 userId,
                 cardholderName,
-                expiryMonth: formattedMonth,
+                expiryMonth: preservedMonth,
                 expiryYear,
                 type: cardType,
                 isDefault: isDefault || false,

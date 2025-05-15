@@ -147,28 +147,31 @@ const getUserInvestments = async (req, res) => {
         // Get userId from either _id or id property
         const userId = req.user?._id || req.user?.id;
         // Log request for debugging
-        console.log('getUserInvestments request from user:', userId);
+        console.log('[getUserInvestments] Request from user:', userId);
         // Check if user exists
         if (!userId) {
-            console.error('User not authenticated - no userId found in request');
+            console.error('[getUserInvestments] User not authenticated - no userId found in request');
             return res.status(http_status_codes_1.StatusCodes.UNAUTHORIZED).json({
                 success: false,
                 message: 'User not authenticated',
             });
         }
-        console.log('Fetching investments for user:', userId);
+        console.log('[getUserInvestments] Fetching investments for user:', userId);
+        // Find all active investments for the user
         const investments = await Investment_1.Investment.find({
             userId,
             isActive: true,
-        }).populate('companyId');
-        console.log(`Found ${investments.length} investments for user:`, userId);
+        });
+        console.log(`[getUserInvestments] Found ${investments.length} investments for user:`, userId);
         if (investments.length === 0) {
+            console.log('[getUserInvestments] No investments found, returning empty array');
             return res.status(http_status_codes_1.StatusCodes.OK).json({
                 success: true,
                 count: 0,
                 data: {
                     investments: [],
                     totalValue: 0,
+                    totalInvested: 0,
                     totalProfit: 0,
                     totalProfitPercent: 0,
                 },
@@ -176,11 +179,19 @@ const getUserInvestments = async (req, res) => {
             });
         }
         // Update investment values based on current company prices
+        console.log('[getUserInvestments] Updating investment values for all investments');
         for (const investment of investments) {
-            // Use type assertion to handle the method that's defined on the schema
-            await investment.updateValues();
+            try {
+                // Use type assertion to handle the method that's defined on the schema
+                await investment.updateValues();
+                console.log(`[getUserInvestments] Updated values for investment ${investment._id}`);
+            }
+            catch (updateError) {
+                console.error(`[getUserInvestments] Error updating investment ${investment._id}:`, updateError);
+            }
         }
         // Fetch updated investments with populated company data
+        console.log('[getUserInvestments] Fetching updated investments with company data');
         const updatedInvestments = await Investment_1.Investment.find({
             userId,
             isActive: true,
@@ -192,8 +203,15 @@ const getUserInvestments = async (req, res) => {
             totalValue += inv.currentValue;
             totalInvested += inv.amount;
         }
-        const totalProfit = totalValue - totalInvested;
-        const totalProfitPercent = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+        const totalProfit = parseFloat((totalValue - totalInvested).toFixed(2));
+        const totalProfitPercent = parseFloat((totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0).toFixed(2));
+        console.log('[getUserInvestments] Portfolio summary:', {
+            investmentsCount: updatedInvestments.length,
+            totalValue,
+            totalInvested,
+            totalProfit,
+            totalProfitPercent,
+        });
         res.status(http_status_codes_1.StatusCodes.OK).json({
             success: true,
             count: updatedInvestments.length,
@@ -207,7 +225,7 @@ const getUserInvestments = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Error fetching investments:', error);
+        console.error('[getUserInvestments] Error:', error);
         res.status(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: 'Failed to fetch investments',
@@ -319,10 +337,17 @@ const buyShares = async (req, res) => {
         // Calculate cost
         const cost = parseFloat((sharesNum * company.currentPrice).toFixed(2));
         console.log(`[buyShares] Transaction cost: ${cost} for ${sharesNum} shares at ${company.currentPrice} per share`);
-        let account;
+        // Ensure userId is a valid ObjectId
+        const userObjectId = mongoose_1.default.Types.ObjectId.isValid(userId)
+            ? userId
+            : new mongoose_1.default.Types.ObjectId(userId);
+        // Declare account with proper type
+        let account = null;
         if (accountId === 'default') {
             console.log('[buyShares] Using default account - finding first account for user');
-            account = await Account_1.default.findOne({ userId }).sort({ createdAt: 1 });
+            account = await Account_1.default.findOne({ userId: userObjectId }).sort({
+                createdAt: 1,
+            });
             if (!account) {
                 console.error('[buyShares] No account found for user:', userId);
                 return res.status(http_status_codes_1.StatusCodes.NOT_FOUND).json({
@@ -342,7 +367,10 @@ const buyShares = async (req, res) => {
                 });
             }
             console.log(`[buyShares] Looking up specific account: ${accountId}`);
-            account = await Account_1.default.findOne({ _id: accountId, userId });
+            account = await Account_1.default.findOne({
+                _id: accountId,
+                userId: userObjectId,
+            });
             if (!account) {
                 console.error(`[buyShares] Account not found with ID: ${accountId} for user: ${userId}`);
                 return res.status(http_status_codes_1.StatusCodes.NOT_FOUND).json({
@@ -365,7 +393,11 @@ const buyShares = async (req, res) => {
         await account.save();
         console.log(`[buyShares] Updated account balance from ${previousBalance} to ${account.balance}`);
         // Check if user already has an investment for this company
-        let investment = await Investment_1.Investment.findOne({ userId, companyId });
+        let investment = await Investment_1.Investment.findOne({
+            userId: userObjectId,
+            companyId,
+            isActive: true,
+        });
         console.log(`[buyShares] Existing investment check:`, investment ? 'Found existing investment' : 'No existing investment');
         if (investment) {
             const newTotalShares = investment.shares + sharesNum;
@@ -379,39 +411,59 @@ const buyShares = async (req, res) => {
         }
         else {
             investment = await Investment_1.Investment.create({
-                userId,
+                userId: userObjectId,
                 companyId,
                 shares: sharesNum,
                 amount: cost,
                 purchaseDate: new Date(),
                 purchasePrice: company.currentPrice,
                 currentValue: cost,
+                profit: 0,
+                profitPercent: 0,
+                isActive: true,
             });
             console.log(`[buyShares] Created new investment: ${investment._id}`);
         }
-        await investment.updateValues();
+        // Make sure to update and recalculate values
+        const updatedInvestment = await investment.updateValues();
+        console.log(`[buyShares] Values updated for investment ${investment._id}`);
+        // Generate a unique transaction ID
         const transactionId = await Transaction_1.default.generateTransactionId();
-        const transaction = await Transaction_1.default.create({
-            transactionId,
-            type: Transaction_1.TransactionType.INVESTMENT,
-            amount: cost,
-            fee: 0,
-            fromAccount: account._id,
-            description: `Purchased ${sharesNum} shares of ${company.symbol} at ${formatCurrency(company.currentPrice)} per share. Investment ID: ${investment._id}`,
-            status: Transaction_1.TransactionStatus.COMPLETED,
-            merchantName: company.name,
-            merchantLogo: company.logoUrl || '',
-            merchantCategory: company.sector || 'Investments',
-            date: new Date(),
-            currency: '₱',
-        });
-        console.log(`[buyShares] Created transaction record: ${transaction._id}`);
+        try {
+            // Create the transaction record with explicit type checking
+            if (account && account._id) {
+                const transaction = await Transaction_1.default.create({
+                    transactionId,
+                    userId: userObjectId.toString(),
+                    accountId: account._id.toString(),
+                    type: Transaction_1.TransactionType.INVESTMENT,
+                    amount: cost,
+                    fee: 0,
+                    fromAccount: account._id,
+                    description: `Purchased ${sharesNum} shares of ${company.symbol} at ${formatCurrency(company.currentPrice)} per share. Investment ID: ${investment._id}`,
+                    status: Transaction_1.TransactionStatus.COMPLETED,
+                    merchantName: company.name,
+                    merchantLogo: company.logoUrl || '',
+                    merchantCategory: company.sector || 'Investments',
+                    date: new Date(),
+                    currency: '₱',
+                });
+                console.log(`[buyShares] Created transaction record: ${transaction._id}`);
+            }
+            else {
+                console.error('[buyShares] Unable to create transaction: account or account._id is null');
+            }
+        }
+        catch (transactionError) {
+            console.error('[buyShares] Error creating transaction:', transactionError);
+            // Continue even if transaction creation fails - the investment is already saved
+        }
         // Get the updated investment with company data
-        const updatedInvestment = await Investment_1.Investment.findById(investment._id).populate('companyId');
+        const updatedInvestmentWithCompanyData = await Investment_1.Investment.findById(investment._id).populate('companyId');
         console.log(`[buyShares] Transaction completed successfully`);
         res.status(http_status_codes_1.StatusCodes.CREATED).json({
             success: true,
-            data: { investment: updatedInvestment },
+            data: { investment: updatedInvestmentWithCompanyData },
         });
     }
     catch (error) {
@@ -435,8 +487,8 @@ const formatCurrency = (amount) => {
 // Sell shares
 const sellShares = async (req, res) => {
     try {
-        // Get userId from either _id or id property
-        const userId = req.user?._id || req.user?.id;
+        // Get userId from either _id or id property and ensure it's a string
+        const userId = (req.user?._id || req.user?.id).toString();
         const { investmentId, shares, accountId } = req.body;
         console.log(`[sellShares] Request params - userId: ${userId}, investmentId: ${investmentId}, shares: ${shares}, accountId: ${accountId}`);
         if (!userId) {
@@ -505,7 +557,7 @@ const sellShares = async (req, res) => {
         const saleValue = parseFloat((sharesNum * company.currentPrice).toFixed(2));
         console.log(`[sellShares] Transaction value: ${saleValue} for ${sharesNum} shares at ${company.currentPrice} per share`);
         // Find account for the transaction
-        let account;
+        let account = null;
         // Handle 'default' account case - find first available account
         if (accountId === 'default') {
             console.log('[sellShares] Using default account - finding first account for user');
@@ -543,36 +595,56 @@ const sellShares = async (req, res) => {
         account.balance = parseFloat((account.balance + saleValue).toFixed(2));
         await account.save();
         console.log(`[sellShares] Updated account balance from ${previousBalance} to ${account.balance}`);
+        let transaction = null;
         // Create transaction record
-        const transactionId = await Transaction_1.default.generateTransactionId();
-        const transaction = await Transaction_1.default.create({
-            transactionId,
-            type: Transaction_1.TransactionType.INVESTMENT,
-            amount: saleValue,
-            fee: 0,
-            toAccount: account._id,
-            description: `Sold ${sharesNum} shares of ${company.symbol} at ${formatCurrency(company.currentPrice)} per share. Investment ID: ${investment._id}`,
-            status: Transaction_1.TransactionStatus.COMPLETED,
-            merchantName: company.name,
-            merchantLogo: company.logoUrl || '',
-            merchantCategory: company.sector || 'Investments',
-            date: new Date(),
-            currency: '₱',
-        });
-        console.log(`[sellShares] Created transaction record: ${transaction._id}`);
+        try {
+            const transactionId = await Transaction_1.default.generateTransactionId();
+            // Ensure account has proper typing and has an _id property
+            if (account && mongoose_1.default.isValidObjectId(account._id)) {
+                // Use a type assertion to tell TypeScript that account._id is a valid ObjectId
+                const accountId = account._id;
+                const accountIdString = accountId.toString();
+                transaction = await Transaction_1.default.create({
+                    transactionId,
+                    userId: userId,
+                    accountId: accountIdString,
+                    type: Transaction_1.TransactionType.INVESTMENT,
+                    amount: saleValue,
+                    fee: 0,
+                    toAccount: account._id,
+                    description: `Sold ${sharesNum} shares of ${company.symbol} at ${formatCurrency(company.currentPrice)} per share. Investment ID: ${investment._id}`,
+                    status: Transaction_1.TransactionStatus.COMPLETED,
+                    merchantName: company.name,
+                    merchantLogo: company.logoUrl || '',
+                    merchantCategory: company.sector || 'Investments',
+                    date: new Date(),
+                    currency: '₱',
+                });
+                console.log(`[sellShares] Transaction record created: ${transaction._id}`);
+            }
+            else {
+                console.error('[sellShares] Cannot create transaction: Invalid account or account ID');
+            }
+        }
+        catch (error) {
+            console.error('[sellShares] Error creating transaction:', error);
+        }
         if (sharesNum === investment.shares) {
-            // Selling all shares
+            // Selling all shares - mark as inactive
             investment.isActive = false;
             await investment.save();
             console.log(`[sellShares] Marked investment as inactive after selling all shares`);
             res.status(http_status_codes_1.StatusCodes.OK).json({
                 success: true,
                 message: 'Successfully sold all shares',
-                data: { saleValue },
+                data: {
+                    saleValue,
+                    transactionId: transaction?.transactionId || null,
+                },
             });
         }
         else {
-            // Selling partial shares
+            // Selling partial shares - update shares count and amount
             const newShares = investment.shares - sharesNum;
             const proportionalCost = (sharesNum / investment.shares) * investment.amount;
             investment.shares = newShares;
@@ -586,7 +658,11 @@ const sellShares = async (req, res) => {
             res.status(http_status_codes_1.StatusCodes.OK).json({
                 success: true,
                 message: 'Successfully sold shares',
-                data: { investment: updatedInvestment, saleValue },
+                data: {
+                    investment: updatedInvestment,
+                    saleValue,
+                    transactionId: transaction?.transactionId || null,
+                },
             });
         }
         console.log(`[sellShares] Transaction completed successfully`);

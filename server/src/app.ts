@@ -52,9 +52,6 @@ const allowedOrigins = [
   'http://10.0.2.2:19000',
   'exp://10.0.2.2:19000',
   'http://10.0.2.2:6000',
-  // Wildcard for development
-  '*',
-  // If your app is hosted, add the production URLs here
 ];
 
 app.use(

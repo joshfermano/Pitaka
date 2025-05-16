@@ -8,5 +8,5 @@ declare global {
   }
 }
 
-import * as express from 'express';
-export = express;
+// This ensures compatibility with the TypeScript module system
+export {};

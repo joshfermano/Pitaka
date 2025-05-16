@@ -30,7 +30,11 @@ const allowedOrigins = [
     // Mobile device testing with Expo Go
     'exp://localhost:19000',
     'exp://127.0.0.1:19000',
-    // Add your specific local network IP - crucial for Expo Go on physical devices
+    // Common development IP addresses
+    'http://192.168.1.9:19000',
+    'exp://192.168.1.9:19000',
+    'http://192.168.1.9:6000',
+    'http://192.168.1.9:8081',
     'http://192.168.1.10:19000',
     'exp://192.168.1.10:19000',
     'http://192.168.1.10:6000',
@@ -43,10 +47,14 @@ const allowedOrigins = [
     'http://10.0.2.2:19000',
     'exp://10.0.2.2:19000',
     'http://10.0.2.2:6000',
-    // Wildcard for development
-    '*',
-    // If your app is hosted, add the production URLs here
+    // Production URLs
+    'https://pitaka-app.vercel.app',
+    'https://pitaka-web.vercel.app',
+    'https://pitaka.app',
+    'capacitor://localhost',
+    'http://localhost',
 ];
+// CORS middleware
 app.use((0, cors_1.default)({
     origin: function (origin, callback) {
         console.log(`CORS request from origin: ${origin || 'No origin (likely mobile app)'}`);
@@ -62,9 +70,16 @@ app.use((0, cors_1.default)({
         }
         // In production, check against the allowed origins list
         if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+            console.log('CORS: Origin allowed:', origin);
             callback(null, true);
         }
         else {
+            // Check if it's a dynamic IP in development range
+            const isDynamicLocalIP = /^https?:\/\/192\.168\.\d+\.\d+/.test(origin);
+            if (isDynamicLocalIP) {
+                console.log('CORS: Allowing dynamic local IP:', origin);
+                return callback(null, true);
+            }
             console.warn(`CORS: Origin ${origin} not allowed in production`);
             callback(new Error('Not allowed by CORS'));
         }
@@ -146,7 +161,6 @@ const startServer = async () => {
         }
         else {
             console.log('✅ MongoDB connection successful');
-            // Seed database with initial data if in development mode
             if (process.env.NODE_ENV === 'development') {
                 try {
                     console.log('🌱 Seeding database with initial data...');

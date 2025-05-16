@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/app.ts",
     "start": "node dist/app.js",
+    "prebuild": "node scripts/install-types.js",
     "build": "tsc",
     "seed": "ts-node src/seed.ts"
   },

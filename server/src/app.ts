@@ -25,7 +25,6 @@ const PORT = process.env.PORT || 5000;
 
 const app = express();
 
-// Allowed origins for CORS
 const allowedOrigins = [
   // Local development
   'http://localhost:6000',
